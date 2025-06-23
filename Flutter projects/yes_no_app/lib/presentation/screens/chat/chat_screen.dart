@@ -7,21 +7,30 @@ import 'package:yes_no_app/presentation/widgets/chat/my_message_buble.dart';
 import 'package:yes_no_app/presentation/widgets/shared/message_field_box.dart';
 
 class ChatScreen extends StatelessWidget {
-  const ChatScreen({super.key});
+  final String chatTitle;
+  const ChatScreen({super.key, this.chatTitle = 'Angelina Jolie'});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.all(5.0),
-          child: CircleAvatar(
-            backgroundImage: NetworkImage(
-              "https://i.guim.co.uk/img/static/sys-images/Film/Pix/pictures/2002/04/30/life1.jpg?width=465&dpr=1&s=none&crop=none",
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+        title: Text(chatTitle),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.all(5.0),
+            child: CircleAvatar(
+              backgroundImage: NetworkImage(
+                "https://i.guim.co.uk/img/static/sys-images/Film/Pix/pictures/2002/04/30/life1.jpg?width=465&dpr=1&s=none&crop=none",
+              ),
             ),
           ),
-        ),
-        title: const Text('Angelina Jolie'),
+        ],
       ),
       
       body: Padding(

@@ -2,15 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:yes_no_app/presentation/providers/chat_provider.dart';
 
-class MessageFieldBox extends StatelessWidget {
+class MessageFieldBox extends StatefulWidget {
   const MessageFieldBox({super.key});
+
+  @override
+  State<MessageFieldBox> createState() => _MessageFieldBoxState();
+}
+
+class _MessageFieldBoxState extends State<MessageFieldBox> {
+  final TextEditingController textController = TextEditingController();
+  final FocusNode focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    textController.dispose();
+    focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-
-    final textController = TextEditingController();
-    final FocusNode focusNode = FocusNode();
 
     final outlineInputBorder = UnderlineInputBorder(
       borderRadius: BorderRadius.circular(40.0),
@@ -29,9 +41,7 @@ class MessageFieldBox extends StatelessWidget {
       icon: Icon(Icons.send, color: Theme.of(context).colorScheme.primary),
       onPressed: () {
         final message = textController.value.text.trim();
-        
         if (message.isNotEmpty) {
-          // Handle message sending logic here
           context.read<ChatProvider>().sendMessage(message);
           textController.clear();
         }
@@ -46,15 +56,13 @@ class MessageFieldBox extends StatelessWidget {
       decoration: inputDecoration,
       controller: textController,
       onFieldSubmitted: (value) {
-        if (value.isNotEmpty) {
+        final message = value.trim();
+        if (message.isNotEmpty) {
+          context.read<ChatProvider>().sendMessage(message);
           textController.clear();
           focusNode.requestFocus();
         }
       },
-      /* onChanged: (value) {
-        // Optionally handle text changes
-        print('changed: $value');
-      }, */
     );
 
     return Container(

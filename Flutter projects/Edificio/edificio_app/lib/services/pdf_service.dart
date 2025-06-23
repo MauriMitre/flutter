@@ -1019,4 +1019,492 @@ class PdfService {
     
     return file.path;
   }
+
+  // Generar y guardar un informe de deudas del inquilino
+  Future<String> generarInformeDeudas(Inquilino inquilino) async {
+    // Crear documento PDF
+    final pdf = pw.Document();
+    
+    // Obtener datos del inquilino
+    final nombre = '${inquilino.nombre} ${inquilino.apellido}';
+    final departamento = inquilino.departamento;
+    
+    // Fecha actual para el informe
+    final fechaActual = DateFormat('dd/MM/yyyy', 'es_ES').format(DateTime.now());
+    final horaActual = DateFormat('HH:mm', 'es_ES').format(DateTime.now());
+    
+    // Colores principales para el PDF
+    final colorPrimario = PdfColors.red700;
+    final colorSecundario = PdfColors.red200;
+    final colorTextoClaro = PdfColors.white;
+    final colorFilaAlternada = PdfColors.grey100;
+    final colorResaltado = PdfColors.red900;
+    final colorSecundarioSuave = PdfColors.red50;
+    final colorNegroSombra = PdfColors.grey800;
+    final colorPrimarioSuave = PdfColors.red100;
+    
+    // Recopilar todas las deudas del inquilino
+    final deudas = <Map<String, dynamic>>[];
+    double totalDeuda = 0.0;
+    
+    // Obtener todos los meses con pagos registrados
+    final mesesRegistrados = <String>{};
+    inquilino.pagos.keys.forEach((mesAnio) => mesesRegistrados.add(mesAnio));
+    inquilino.pagosAlquiler.keys.forEach((mesAnio) => mesesRegistrados.add(mesAnio));
+    inquilino.pagosExpensas.keys.forEach((mesAnio) => mesesRegistrados.add(mesAnio));
+    inquilino.montosPendientes.keys.forEach((mesAnio) => mesesRegistrados.add(mesAnio));
+    
+    // Para cada mes, verificar si hay deudas
+    for (final mesAnio in mesesRegistrados) {
+      final pagadoAlquiler = inquilino.haPagadoAlquiler(mesAnio);
+      final pagadoExpensas = inquilino.haPagadoExpensas(mesAnio);
+      final montoPendiente = inquilino.getMontoPendiente(mesAnio);
+      
+      // Formatear fecha para mostrar
+      final partesFecha = mesAnio.split('-');
+      final mes = int.parse(partesFecha[0]);
+      final anio = int.parse(partesFecha[1]);
+      final fechaFormateada = DateFormat('MMMM yyyy', 'es_ES').format(DateTime(anio, mes));
+      
+      // Verificar deuda de alquiler
+      if (!pagadoAlquiler) {
+        deudas.add({
+          'periodo': fechaFormateada,
+          'mesAnio': mesAnio,
+          'concepto': 'Alquiler',
+          'monto': inquilino.precioAlquiler,
+        });
+        totalDeuda += inquilino.precioAlquiler;
+      }
+      
+      // Verificar deuda de expensas
+      if (!pagadoExpensas) {
+        final expensasMes = inquilino.getExpensasPorMes(mesAnio);
+        deudas.add({
+          'periodo': fechaFormateada,
+          'mesAnio': mesAnio,
+          'concepto': 'Expensas',
+          'monto': expensasMes,
+        });
+        totalDeuda += expensasMes;
+      }
+      
+      // Verificar montos pendientes
+      if (montoPendiente > 0) {
+        deudas.add({
+          'periodo': fechaFormateada,
+          'mesAnio': mesAnio,
+          'concepto': 'Monto Pendiente',
+          'monto': montoPendiente,
+        });
+        totalDeuda += montoPendiente;
+      }
+    }
+    
+    // Ordenar deudas por fecha (más antiguas primero)
+    deudas.sort((a, b) {
+      final mesAnioA = a['mesAnio'] as String;
+      final mesAnioB = b['mesAnio'] as String;
+      
+      final partesA = mesAnioA.split('-');
+      final partesB = mesAnioB.split('-');
+      
+      final anioA = int.parse(partesA[1]);
+      final anioB = int.parse(partesB[1]);
+      
+      if (anioA != anioB) {
+        return anioA.compareTo(anioB);
+      }
+      
+      final mesA = int.parse(partesA[0]);
+      final mesB = int.parse(partesB[0]);
+      return mesA.compareTo(mesB);
+    });
+    
+    // Agregar página al PDF
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Cabecera con título
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(vertical: 20, horizontal: 15),
+                decoration: pw.BoxDecoration(
+                  color: colorPrimario,
+                  borderRadius: const pw.BorderRadius.only(
+                    topLeft: pw.Radius.circular(10),
+                    topRight: pw.Radius.circular(10),
+                  ),
+                  boxShadow: [
+                    pw.BoxShadow(
+                      color: colorNegroSombra,
+                      blurRadius: 3,
+                      offset: const PdfPoint(0, 2),
+                    ),
+                  ],
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'INFORME DE DEUDAS',
+                          style: pw.TextStyle(
+                            fontSize: 24,
+                            fontWeight: pw.FontWeight.bold,
+                            color: colorTextoClaro,
+                          ),
+                        ),
+                        pw.SizedBox(height: 5),
+                        pw.Text(
+                          'Detalle de pagos pendientes',
+                          style: pw.TextStyle(
+                            fontSize: 16,
+                            color: colorTextoClaro,
+                          ),
+                        ),
+                      ],
+                    ),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text(
+                          'Fecha: $fechaActual',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: colorTextoClaro,
+                          ),
+                        ),
+                        pw.Text(
+                          'Hora: $horaActual',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: colorTextoClaro,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Datos del inquilino
+              pw.Container(
+                padding: const pw.EdgeInsets.all(15),
+                decoration: pw.BoxDecoration(
+                  color: colorSecundarioSuave,
+                  borderRadius: const pw.BorderRadius.only(
+                    bottomLeft: pw.Radius.circular(10),
+                    bottomRight: pw.Radius.circular(10),
+                  ),
+                  border: pw.Border.all(
+                    color: colorSecundario,
+                    width: 0.5,
+                  ),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'DATOS DEL INQUILINO',
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                        color: colorPrimario,
+                      ),
+                    ),
+                    pw.SizedBox(height: 8),
+                    pw.Row(
+                      children: [
+                        pw.Expanded(
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Row(
+                                children: [
+                                  pw.Text(
+                                    'Nombre: ',
+                                    style: pw.TextStyle(
+                                      fontWeight: pw.FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  pw.Text(
+                                    nombre,
+                                    style: const pw.TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              pw.SizedBox(height: 5),
+                              pw.Row(
+                                children: [
+                                  pw.Text(
+                                    'Departamento: ',
+                                    style: pw.TextStyle(
+                                      fontWeight: pw.FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  pw.Text(
+                                    departamento,
+                                    style: const pw.TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+                          decoration: pw.BoxDecoration(
+                            color: colorPrimarioSuave,
+                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
+                            border: pw.Border.all(
+                              color: colorPrimario,
+                              width: 0.5,
+                            ),
+                          ),
+                          child: pw.Column(
+                            children: [
+                              pw.Text(
+                                'DEUDA TOTAL',
+                                style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold,
+                                  fontSize: 10,
+                                  color: colorPrimario,
+                                ),
+                              ),
+                              pw.SizedBox(height: 2),
+                              pw.Text(
+                                '\$${totalDeuda.toStringAsFixed(2)}',
+                                style: pw.TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: colorResaltado,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              pw.SizedBox(height: 20),
+              
+              // Tabla de deudas
+              deudas.isEmpty
+                  ? pw.Center(
+                      child: pw.Container(
+                        padding: const pw.EdgeInsets.all(20),
+                        decoration: pw.BoxDecoration(
+                          color: PdfColors.green50,
+                          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+                          border: pw.Border.all(
+                            color: PdfColors.green300,
+                            width: 0.5,
+                          ),
+                        ),
+                        child: pw.Column(
+                          children: [
+                            pw.Text(
+                              '¡El inquilino no tiene deudas pendientes!',
+                              style: pw.TextStyle(
+                                fontSize: 16,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.green800,
+                              ),
+                            ),
+                            pw.SizedBox(height: 10),
+                            pw.Text(
+                              'Todos los pagos están al día',
+                              style: pw.TextStyle(
+                                fontSize: 12,
+                                color: PdfColors.green800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : pw.Table(
+                      border: pw.TableBorder.all(
+                        color: colorPrimarioSuave,
+                        width: 0.5,
+                      ),
+                      columnWidths: {
+                        0: const pw.FlexColumnWidth(3), // Período
+                        1: const pw.FlexColumnWidth(3), // Concepto
+                        2: const pw.FlexColumnWidth(2), // Monto
+                      },
+                      children: [
+                        // Encabezado de la tabla
+                        pw.TableRow(
+                          decoration: pw.BoxDecoration(
+                            color: colorPrimario,
+                          ),
+                          children: [
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(8),
+                              child: pw.Text(
+                                'Período',
+                                style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: colorTextoClaro,
+                                ),
+                                textAlign: pw.TextAlign.center,
+                              ),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(8),
+                              child: pw.Text(
+                                'Concepto',
+                                style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: colorTextoClaro,
+                                ),
+                                textAlign: pw.TextAlign.center,
+                              ),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(8),
+                              child: pw.Text(
+                                'Monto',
+                                style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: colorTextoClaro,
+                                ),
+                                textAlign: pw.TextAlign.center,
+                              ),
+                            ),
+                          ],
+                        ),
+                        // Filas de deudas
+                        ...deudas.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final deuda = entry.value;
+                          final bool filaAlternada = index % 2 == 1;
+                          
+                          return pw.TableRow(
+                            decoration: pw.BoxDecoration(
+                              color: filaAlternada ? colorFilaAlternada : PdfColors.white,
+                            ),
+                            children: [
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(8),
+                                child: pw.Text(
+                                  deuda['periodo'] as String,
+                                  textAlign: pw.TextAlign.center,
+                                ),
+                              ),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(8),
+                                child: pw.Text(
+                                  deuda['concepto'] as String,
+                                  textAlign: pw.TextAlign.center,
+                                ),
+                              ),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(8),
+                                child: pw.Text(
+                                  '\$${(deuda['monto'] as double).toStringAsFixed(2)}',
+                                  textAlign: pw.TextAlign.right,
+                                  style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                        // Fila de total
+                        pw.TableRow(
+                          decoration: pw.BoxDecoration(
+                            color: colorPrimarioSuave,
+                          ),
+                          children: [
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(8),
+                              child: pw.Text(
+                                '',
+                                textAlign: pw.TextAlign.center,
+                              ),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(8),
+                              child: pw.Text(
+                                'TOTAL',
+                                textAlign: pw.TextAlign.right,
+                                style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.all(8),
+                              child: pw.Text(
+                                '\$${totalDeuda.toStringAsFixed(2)}',
+                                textAlign: pw.TextAlign.right,
+                                style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: colorResaltado,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+              
+              pw.SizedBox(height: 30),
+              
+              // Pie de página
+              pw.Container(
+                alignment: pw.Alignment.center,
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'Este informe es un detalle de las deudas pendientes del inquilino.',
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey600,
+                      ),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                    pw.SizedBox(height: 5),
+                    pw.Text(
+                      'Generado el $fechaActual a las $horaActual',
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey600,
+                      ),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    
+    // Guardar el PDF
+    final output = await getTemporaryDirectory();
+    final file = File('${output.path}/deudas_${inquilino.apellido}_${inquilino.nombre}_${DateTime.now().millisecondsSinceEpoch}.pdf');
+    await file.writeAsBytes(await pdf.save());
+    
+    // Abrir el PDF
+    await OpenFile.open(file.path);
+    
+    return file.path;
+  }
 }

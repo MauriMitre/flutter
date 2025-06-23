@@ -66,16 +66,22 @@ class Inquilino {
 
   // Verifica si ha pagado el alquiler
   bool haPagadoAlquiler(String mesAnio) {
+    // Imprimir información de depuración
+    print('Verificando pago de alquiler para $mesAnio: ${pagosAlquiler[mesAnio] ?? false}');
     return pagosAlquiler[mesAnio] ?? false;
   }
 
   // Verifica si ha pagado las expensas
   bool haPagadoExpensas(String mesAnio) {
+    // Imprimir información de depuración
+    print('Verificando pago de expensas para $mesAnio: ${pagosExpensas[mesAnio] ?? false}');
     return pagosExpensas[mesAnio] ?? false;
   }
 
   // Obtener el monto pendiente para un mes específico
   double getMontoPendiente(String mesAnio) {
+    // Imprimir información de depuración
+    print('Obteniendo monto pendiente para $mesAnio: ${montosPendientes[mesAnio] ?? 0.0}');
     return montosPendientes[mesAnio] ?? 0.0;
   }
   
@@ -144,7 +150,9 @@ class Inquilino {
   // Obtener las expensas para un mes específico
   double getExpensasPorMes(String mesAnio) {
     // Si el inquilino tiene expensas personalizadas para este mes, devolver esas
-    return expensas[mesAnio] ?? 0.0;
+    final expensasMes = expensas[mesAnio] ?? 0.0;
+    print('Obteniendo expensas para $mesAnio: $expensasMes');
+    return expensasMes;
   }
 
   // Establecer expensas para un mes específico

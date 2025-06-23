@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/inquilino.dart';
+import '../screens/documentos_inquilino_screen.dart';
 
 class EditarInquilinoDialog extends StatefulWidget {
   final Inquilino inquilino;
@@ -114,6 +115,24 @@ class _EditarInquilinoDialogState extends State<EditarInquilinoDialog> {
                   return null;
                 },
               ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DocumentosInquilinoScreen(
+                        inquilino: widget.inquilino,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.folder),
+                label: const Text('Gestionar Documentos'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+              ),
             ],
           ),
         ),
@@ -133,6 +152,12 @@ class _EditarInquilinoDialogState extends State<EditarInquilinoDialog> {
                 departamento: _departamentoController.text,
                 precioAlquiler: double.parse(_precioController.text),
                 pagos: widget.inquilino.pagos,
+                expensas: widget.inquilino.expensas,
+                pagosAlquiler: widget.inquilino.pagosAlquiler,
+                pagosExpensas: widget.inquilino.pagosExpensas,
+                montosPendientes: widget.inquilino.montosPendientes,
+                metodosPago: widget.inquilino.metodosPago,
+                cuentasTransferencia: widget.inquilino.cuentasTransferencia,
               );
               Navigator.pop(context, inquilinoActualizado);
             }

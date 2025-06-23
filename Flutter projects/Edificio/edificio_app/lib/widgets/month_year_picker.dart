@@ -22,15 +22,17 @@ class _MonthYearPickerState extends State<MonthYearPicker> {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
   
+  // Generar años desde 2025 hasta 2030
   final List<int> _years = List.generate(
-    10, 
-    (index) => DateTime.now().year - 2 + index
+    6, 
+    (index) => 2025 + index
   );
 
   @override
   void initState() {
     super.initState();
-    _selectedYear = widget.initialDate.year;
+    // Asegurarse de que el año seleccionado sea al menos 2025
+    _selectedYear = widget.initialDate.year < 2025 ? 2025 : widget.initialDate.year;
     _selectedMonth = widget.initialDate.month;
   }
 

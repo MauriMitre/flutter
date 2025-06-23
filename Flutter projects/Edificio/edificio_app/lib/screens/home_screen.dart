@@ -8,9 +8,11 @@ import '../services/storage_service.dart';
 import '../widgets/editar_expensas_dialog.dart';
 import '../widgets/editar_inquilino_dialog.dart';
 import '../services/pdf_service.dart';
+import '../services/deudas_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/month_year_picker.dart';
 import '../screens/cuentas_transferencia_screen.dart';
+import '../screens/documentos_inquilino_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -25,9 +27,11 @@ class _HomeScreenState extends State<HomeScreen>
   final StorageService _storageService = StorageService();
 
   List<Inquilino> _inquilinos = [];
-  DateTime _selectedDate = DateTime.now();
+  // Usar enero de 2025 como fecha inicial
+  DateTime _selectedDate = DateTime(2025, 1, 1);
   double _expensasComunes = 0.0;
   final PdfService _pdfService = PdfService();
+  final DeudasService _deudasService = DeudasService();
   bool _isLoading = true;
   bool _hayPagosPendientes = false;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -163,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _editarInquilino(Inquilino inquilino) async {
+  Future<void> _mostrarEditarInquilinoDialog(Inquilino inquilino) async {
     final result = await Navigator.push<Inquilino>(
       context,
       MaterialPageRoute(
@@ -482,46 +486,81 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // Verificar pagos pendientes de meses anteriores
+  // Verificar pagos pendientes de meses a partir de 2025
   List<Map<String, dynamic>> _obtenerDetallesPagosPendientes(
       List<Inquilino> inquilinos) {
-    final mesActual = DateTime.now().month;
-    final anioActual = DateTime.now().year;
+    // Usar 2025 como año base
+    final anioBase = 2025;
+    final DateTime now = DateTime.now();
+    final int mesActual = now.month;
+    final int anioActual = now.year;
 
     List<Map<String, dynamic>> detallesPendientes = [];
 
     for (var inquilino in inquilinos) {
       Map<String, List<String>> mesesPendientes = {};
 
-      for (int i = 1; i <= mesActual; i++) {
-        final mesAnterior = i < 10 ? '0$i' : '$i';
-        final mesAnioAnterior = '$mesAnterior-$anioActual';
+      // Revisar los meses desde enero 2025 hasta el mes actual
+      for (int anio = anioBase; anio <= anioActual; anio++) {
+        // Determinar el último mes a revisar para este año
+        int ultimoMes = (anio == anioActual) ? mesActual : 12;
+        
+        for (int mes = 1; mes <= ultimoMes; mes++) {
+          final mesStr = mes < 10 ? '0$mes' : '$mes';
+          final mesAnio = '$mesStr-$anio';
 
-        // Si el mes es anterior al actual
-        if (i < mesActual) {
           List<String> pendientes = [];
 
           // Verificar qué está pendiente
-          if (!inquilino.haPagadoAlquiler(mesAnioAnterior)) {
+          if (!inquilino.haPagadoAlquiler(mesAnio)) {
             pendientes.add('Alquiler');
           }
 
-          if (!inquilino.haPagadoExpensas(mesAnioAnterior)) {
+          if (!inquilino.haPagadoExpensas(mesAnio)) {
             pendientes.add('Expensas');
           }
 
           if (pendientes.isNotEmpty) {
-            final nombreMes =
-                DateFormat('MMMM', 'es_ES').format(DateTime(anioActual, i));
-            mesesPendientes[nombreMes] = pendientes;
+            final nombreMes = DateFormat('MMMM', 'es_ES').format(DateTime(anio, mes));
+            mesesPendientes[mesAnio] = pendientes; // Usar mesAnio como clave para ordenar después
           }
         }
       }
 
       if (mesesPendientes.isNotEmpty) {
+        // Convertir las claves mesAnio a nombres de mes para mostrar, pero mantener el orden
+        final mesesOrdenados = mesesPendientes.keys.toList()
+          ..sort((a, b) {
+            final partesA = a.split('-');
+            final partesB = b.split('-');
+            final anioA = int.parse(partesA[1]);
+            final anioB = int.parse(partesB[1]);
+            if (anioA != anioB) return anioA.compareTo(anioB);
+            final mesA = int.parse(partesA[0]);
+            final mesB = int.parse(partesB[0]);
+            return mesA.compareTo(mesB);
+          });
+        
+        final Map<String, Map<String, dynamic>> mesesFormateados = {};
+        
+        for (final mesAnio in mesesOrdenados) {
+          final partes = mesAnio.split('-');
+          final mes = int.parse(partes[0]);
+          final anio = int.parse(partes[1]);
+          final nombreMes = DateFormat('MMMM', 'es_ES').format(DateTime(anio, mes));
+          final nombreCompleto = '$nombreMes $anio';
+          
+          mesesFormateados[mesAnio] = {
+            'nombre': nombreCompleto,
+            'pendientes': mesesPendientes[mesAnio]!,
+            'mes': mes,
+            'anio': anio,
+          };
+        }
+        
         detallesPendientes.add({
           'inquilino': inquilino,
-          'mesesPendientes': mesesPendientes,
+          'mesesPendientes': mesesFormateados,
         });
       }
     }
@@ -621,7 +660,23 @@ class _HomeScreenState extends State<HomeScreen>
               final detalle = detallesPendientes[index];
               final inquilino = detalle['inquilino'] as Inquilino;
               final mesesPendientes =
-                  detalle['mesesPendientes'] as Map<String, List<String>>;
+                  detalle['mesesPendientes'] as Map<String, Map<String, dynamic>>;
+
+              // Colores para los diferentes meses
+              final List<Color> coloresMeses = [
+                Colors.red.shade100,
+                Colors.orange.shade100,
+                Colors.amber.shade100,
+                Colors.green.shade100,
+                Colors.blue.shade100,
+                Colors.indigo.shade100,
+                Colors.purple.shade100,
+                Colors.pink.shade100,
+                Colors.teal.shade100,
+                Colors.cyan.shade100,
+                Colors.lime.shade100,
+                Colors.brown.shade100,
+              ];
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -640,16 +695,49 @@ class _HomeScreenState extends State<HomeScreen>
                       Text('Depto: ${inquilino.departamento}'),
                       const Divider(),
                       ...mesesPendientes.entries.map((entry) {
-                        return Padding(
-                          padding: const EdgeInsets.only(left: 8, bottom: 4),
-                          child: Text(
-                            '${entry.key}: ${entry.value.join(', ')}',
-                            style: const TextStyle(
-                              fontStyle: FontStyle.italic,
+                        final mesAnio = entry.key;
+                        final datos = entry.value;
+                        final nombreMes = datos['nombre'] as String;
+                        final pendientes = datos['pendientes'] as List<String>;
+                        final mes = datos['mes'] as int;
+                        
+                        // Seleccionar color basado en el mes (índice 0-11)
+                        final colorMes = coloresMeses[(mes - 1) % coloresMeses.length];
+                        final colorBorde = colorMes.withOpacity(0.8);
+                        
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: colorMes,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: colorBorde,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  nombreMes,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  pendientes.join(', '),
+                                  style: const TextStyle(
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         );
-                      }),
+                      }).toList(),
                     ],
                   ),
                 ),
@@ -668,181 +756,12 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _mostrarCalculadoraAumento() {
-    Navigator.pop(context); // cerrar drawer
-
-    final porcentajeController = TextEditingController(text: '10');
-
-    // Crear una lista de controladores para cada inquilino
-    final List<TextEditingController> controladores =
-        _inquilinos.map((_) => TextEditingController(text: '10')).toList();
-
-    // Crear un mapa para almacenar los nuevos valores calculados
-    final Map<String, double> nuevosValores = {};
-
-    // Pre-calcular los valores iniciales
-    for (int i = 0; i < _inquilinos.length; i++) {
-      final inquilino = _inquilinos[i];
-      final porcentaje = double.tryParse(controladores[i].text) ?? 0;
-      final factor = 1 + (porcentaje / 100);
-      final nuevoAlquiler = inquilino.precioAlquiler * factor;
-      nuevosValores[inquilino.id] = nuevoAlquiler;
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Calcular Aumentos'),
-          content: Container(
-            width: double.maxFinite,
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.7,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: TextField(
-                    controller: porcentajeController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Porcentaje para todos',
-                      hintText: 'Ej: 10 para 10%',
-                      border: OutlineInputBorder(),
-                      suffixText: '%',
-                    ),
-                    onChanged: (valor) {
-                      final porcentaje = double.tryParse(valor) ?? 0;
-                      // Actualizar todos los controladores
-                      for (var controlador in controladores) {
-                        controlador.text = porcentaje.toString();
-                      }
-
-                      // Recalcular todos los valores
-      setState(() {
-                        for (int i = 0; i < _inquilinos.length; i++) {
-                          final inquilino = _inquilinos[i];
-                          final factor = 1 + (porcentaje / 100);
-                          final nuevoAlquiler =
-                              inquilino.precioAlquiler * factor;
-                          nuevosValores[inquilino.id] = nuevoAlquiler;
-                        }
-                      });
-                    },
-                  ),
-                ),
-                const Divider(),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _inquilinos.length,
-                    itemBuilder: (context, index) {
-                      final inquilino = _inquilinos[index];
-                      final controlador = controladores[index];
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${inquilino.nombre} ${inquilino.apellido}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text('Depto: ${inquilino.departamento}'),
-                              Text(
-                                  'Alquiler actual: \$${inquilino.precioAlquiler.toStringAsFixed(2)}'),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: controlador,
-                                      keyboardType:
-                                          const TextInputType.numberWithOptions(
-                                              decimal: true),
-                                      decoration: const InputDecoration(
-                                        labelText: 'Porcentaje',
-                                        hintText: 'Ej: 10',
-                                        suffixText: '%',
-                                      ),
-                                      onChanged: (valor) {
-                                        final porcentaje =
-                                            double.tryParse(valor) ?? 0;
-                                        final factor = 1 + (porcentaje / 100);
-                                        final nuevoAlquiler =
-                                            inquilino.precioAlquiler * factor;
-                                        setState(() {
-                                          nuevosValores[inquilino.id] =
-                                              nuevoAlquiler;
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Nuevo: \$${(nuevosValores[inquilino.id] ?? inquilino.precioAlquiler).toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                // Aplicar los aumentos para cada inquilino
-                for (int i = 0; i < _inquilinos.length; i++) {
-                  final inquilino = _inquilinos[i];
-                  final nuevoAlquiler =
-                      nuevosValores[inquilino.id] ?? inquilino.precioAlquiler;
-                  inquilino.precioAlquiler = nuevoAlquiler;
-                }
-
-                // Guardar los cambios
-                _storageService.saveInquilinos(_inquilinos).then((_) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Alquileres actualizados correctamente'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                  setState(() {}); // Actualizar UI
-                }).catchError((e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error al aplicar aumentos: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                });
-              },
-              child: const Text('Aplicar Aumentos'),
-            ),
-          ],
-        ),
-      ),
-    );
+    // Primero cerrar el drawer
+    Navigator.pop(context);
+    // Luego mostrar la calculadora con un pequeño retraso
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) _mostrarCalculadoraAumento();
+    });
   }
 
   void _mostrarHistorialExpensas() {
@@ -947,6 +866,63 @@ class _HomeScreenState extends State<HomeScreen>
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  // Generar informe de deudas
+  Future<void> _generarInformeDeudas(Inquilino inquilino) async {
+    // Mostrar diálogo de carga
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Generando informe'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text('Generando informe de deudas...'),
+          ],
+        ),
+      ),
+    );
+    
+    try {
+      // Generar el informe
+      final filePath = await _deudasService.generarInformeDeudas(inquilino);
+      
+      // Cerrar el diálogo de carga
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      // Mostrar mensaje de éxito
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Informe de deudas generado exitosamente'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      // Cerrar el diálogo de carga en caso de error
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      // Mostrar mensaje de error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al generar informe de deudas: $e'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 
@@ -1310,6 +1286,18 @@ class _HomeScreenState extends State<HomeScreen>
               onTap: () {
                 Navigator.pop(context); // cerrar drawer
                 _navigateToCuentasTransferenciaScreen();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.trending_up),
+              title: const Text('Calculadora de Aumento'),
+              onTap: () {
+                // Primero cerrar el drawer
+                Navigator.pop(context);
+                // Luego mostrar la calculadora con un pequeño retraso
+                Future.delayed(const Duration(milliseconds: 300), () {
+                  if (mounted) _mostrarCalculadoraAumento();
+                });
               },
             ),
             const Divider(),
@@ -1712,8 +1700,16 @@ class _HomeScreenState extends State<HomeScreen>
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: pagado ? Colors.green.shade300 : Colors.grey.shade300,
+          width: 1.5,
+        ),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1731,36 +1727,47 @@ class _HomeScreenState extends State<HomeScreen>
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text('Depto: ${inquilino.departamento}'),
+                      Text(
+                        'Departamento: ${inquilino.departamento}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                Row(
                   children: [
-                    Text(
-                      'Total: \$${total.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: pagado ? Colors.green : Colors.red,
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.folder),
+                      tooltip: 'Ver documentos',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => DocumentosInquilinoScreen(
+                              inquilino: inquilino,
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    if (montoPendiente > 0)
-                      Text(
-                        'Debe: \$${montoPendiente.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange,
-                        ),
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      tooltip: 'Editar inquilino',
+                      onPressed: () => _mostrarEditarInquilinoDialog(inquilino),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete),
+                      tooltip: 'Eliminar inquilino',
+                      onPressed: () => _eliminarInquilino(inquilino),
+                    ),
                   ],
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const Divider(),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1854,21 +1861,15 @@ class _HomeScreenState extends State<HomeScreen>
                     backgroundColor: Colors.red.shade100,
                     onPressed: () => _generarReciboPDF(inquilino),
                   ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.blue),
-                  onPressed: () => _editarInquilino(inquilino),
-                  tooltip: 'Editar',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _eliminarInquilino(inquilino),
-                  tooltip: 'Eliminar',
+                // Botón para generar informe de deudas - siempre visible y destacado
+                ActionChip(
+                  label: const Text('Deudas', style: TextStyle(fontWeight: FontWeight.bold)),
+                  avatar: const Icon(Icons.warning, color: Colors.red),
+                  backgroundColor: Colors.red.shade200,
+                  elevation: 4,
+                  shadowColor: Colors.red.shade300,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  onPressed: () => _generarInformeDeudas(inquilino),
                 ),
               ],
             ),

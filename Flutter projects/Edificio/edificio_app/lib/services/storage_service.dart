@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/inquilino.dart';
 import '../models/tarea.dart';
+import '../models/documento.dart';
 import 'package:uuid/uuid.dart';
 import '../models/cuenta_transferencia.dart';
 
@@ -12,6 +13,7 @@ class StorageService {
   static const String _inquilinosInicializadosKey = 'inquilinos_inicializados';
   static const String _cuentasTransferenciaKey = 'cuentas_transferencia';
   static const String _expensasComunesKey = 'expensas_comunes';
+  static const String _documentosKey = 'documentos';
 
   // Método para guardar inquilinos (optimizado)
   Future<void> saveInquilinos(List<Inquilino> inquilinos) async {
@@ -385,5 +387,86 @@ class StorageService {
         precioAlquiler: 200000,
       ),
     ];
+  }
+
+  // Guardar documentos
+  Future<void> saveDocumentos(List<Documento> documentos) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Convertir lista de documentos a JSON
+    final jsonDocumentos = documentos.map((d) {
+      try {
+        return jsonEncode(d.toMap());
+      } catch (e) {
+        print('Error al codificar documento: $e');
+        return null;
+      }
+    }).where((json) => json != null).toList().cast<String>();
+    
+    // Guardar en SharedPreferences
+    await prefs.setStringList(_documentosKey, jsonDocumentos);
+  }
+  
+  // Cargar documentos
+  Future<List<Documento>> loadDocumentos() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Verificar si hay documentos guardados
+    final jsonDocumentos = prefs.getStringList(_documentosKey);
+    
+    if (jsonDocumentos == null || jsonDocumentos.isEmpty) {
+      return [];
+    }
+    
+    // Convertir JSON a objetos Documento
+    final documentos = <Documento>[];
+    
+    for (final jsonStr in jsonDocumentos) {
+      try {
+        final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final documento = Documento.fromMap(map);
+        // Solo agregar documentos válidos
+        if (documento.id.isNotEmpty && documento.inquilinoId.isNotEmpty) {
+          documentos.add(documento);
+        }
+      } catch (e) {
+        print('Error al decodificar documento: $e');
+      }
+    }
+    
+    return documentos;
+  }
+  
+  // Guardar un documento específico
+  Future<void> saveDocumento(Documento documento) async {
+    // Cargar documentos existentes
+    final documentos = await loadDocumentos();
+    
+    // Buscar si el documento ya existe
+    final index = documentos.indexWhere((d) => d.id == documento.id);
+    
+    if (index >= 0) {
+      // Actualizar documento existente
+      documentos[index] = documento;
+    } else {
+      // Agregar nuevo documento
+      documentos.add(documento);
+    }
+    
+    // Guardar la lista completa
+    await saveDocumentos(documentos);
+  }
+  
+  // Eliminar un documento
+  Future<void> deleteDocumento(String documentoId) async {
+    final documentos = await loadDocumentos();
+    documentos.removeWhere((d) => d.id == documentoId);
+    await saveDocumentos(documentos);
+  }
+  
+  // Obtener documentos por inquilino
+  Future<List<Documento>> getDocumentosPorInquilino(String inquilinoId) async {
+    final documentos = await loadDocumentos();
+    return documentos.where((d) => d.inquilinoId == inquilinoId).toList();
   }
 } 

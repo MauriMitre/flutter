@@ -46,7 +46,11 @@ class _CalculadoraAumentoDialogState extends State<CalculadoraAumentoDialog> {
     for (final inquilino in widget.inquilinos) {
       porcentajesIndividuales[inquilino.id] = TextEditingController();
       inquilinosSeleccionados[inquilino.id] = false;
-      nuevosMontos[inquilino.id] = inquilino.precioAlquiler;
+      
+      // Obtener el precio específico para este mes
+      double precioMes = inquilino.getPrecioAlquilerPorMes(mesActual);
+      nuevosMontos[inquilino.id] = precioMes;
+      log.d('Inicializando inquilino ${inquilino.nombre}: precio para $mesActual = $precioMes');
     }
   }
   
@@ -89,7 +93,7 @@ class _CalculadoraAumentoDialogState extends State<CalculadoraAumentoDialog> {
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.2),
+                    color: Colors.grey.withAlpha(51),
                     spreadRadius: 1,
                     blurRadius: 3,
                     offset: const Offset(0, 2),
@@ -150,8 +154,9 @@ class _CalculadoraAumentoDialogState extends State<CalculadoraAumentoDialog> {
                                 
                                 // Calcular el nuevo monto para mostrar (pero no aplicar)
                                 final porcentaje = double.tryParse(porcentajeGeneral) ?? 0;
-                                nuevosMontos[inquilino.id] = inquilino.precioAlquiler + 
-                                  (inquilino.precioAlquiler * porcentaje / 100);
+                                final precioActual = inquilino.getPrecioAlquilerPorMes(mesActual);
+                                nuevosMontos[inquilino.id] = precioActual + 
+                                  (precioActual * porcentaje / 100);
                               }
                             }
                           });
@@ -326,8 +331,9 @@ class _CalculadoraAumentoDialogState extends State<CalculadoraAumentoDialog> {
                                         // Solo calcular el nuevo monto para mostrar
                                         setState(() {
                                           final porcentaje = double.tryParse(value) ?? 0;
-                                          nuevosMontos[inquilino.id] = inquilino.precioAlquiler + 
-                                            (inquilino.precioAlquiler * porcentaje / 100);
+                                          final precioActual = inquilino.getPrecioAlquilerPorMes(mesActual);
+                                          nuevosMontos[inquilino.id] = precioActual + 
+                                            (precioActual * porcentaje / 100);
                                         });
                                       },
                                     ),
@@ -400,9 +406,12 @@ class _CalculadoraAumentoDialogState extends State<CalculadoraAumentoDialog> {
       return;
     }
     
+    // Obtener el precio actual para el mes seleccionado
+    final precioActual = inquilino.getPrecioAlquilerPorMes(mesActual);
+    
     // Calcular el nuevo monto
-    final nuevoMonto = inquilino.precioAlquiler + 
-      (inquilino.precioAlquiler * porcentaje / 100);
+    final nuevoMonto = precioActual + (precioActual * porcentaje / 100);
+    log.d('Calculando aumento para ${inquilino.nombre}: $precioActual -> $nuevoMonto ($porcentaje%)');
     
     try {
       // Aplicar el aumento usando el método estático
@@ -453,9 +462,12 @@ class _CalculadoraAumentoDialogState extends State<CalculadoraAumentoDialog> {
           algunoSeleccionado = true;
           final porcentaje = double.tryParse(porcentajesIndividuales[inquilino.id]!.text) ?? 0;
           if (porcentaje > 0) {
+            // Obtener el precio actual para el mes seleccionado
+            final precioActual = inquilino.getPrecioAlquilerPorMes(mesActual);
+            
             // Calcular el nuevo monto
-            final nuevoMonto = inquilino.precioAlquiler + 
-              (inquilino.precioAlquiler * porcentaje / 100);
+            final nuevoMonto = precioActual + (precioActual * porcentaje / 100);
+            log.d('Calculando aumento para ${inquilino.nombre}: $precioActual -> $nuevoMonto ($porcentaje%)');
             
             // Aplicar el aumento usando el método estático
             final inquilinoActualizado = Inquilino.aplicarAumento(

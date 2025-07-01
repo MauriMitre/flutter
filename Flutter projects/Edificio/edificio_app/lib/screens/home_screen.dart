@@ -753,17 +753,29 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     ).then((inquilinosActualizados) {
       if (inquilinosActualizados != null && inquilinosActualizados is List<String> && inquilinosActualizados.isNotEmpty) {
-        // Recargar la lista de inquilinos
-        _cargarInquilinos();
-        
-        // Mostrar mensaje de éxito
-        ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
-          SnackBar(
-            content: Text('Aumentos aplicados a ${inquilinosActualizados.join(", ")}'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        // Recargar los inquilinos desde el almacenamiento para asegurar que tenemos los datos más recientes
+        _storageService.loadInquilinos().then((inquilinosActualizados) {
+          if (mounted) {
+            setState(() {
+              _inquilinos = inquilinosActualizados;
+            });
+            
+            // Recalcular totales con los datos actualizados
+            final mesAnio = DateFormat('MM-yyyy').format(_selectedDate);
+            _calcularTotalesRecibidos(_inquilinos, mesAnio);
+          }
+          
+          // Mostrar mensaje de éxito
+          if (mounted) {
+            ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
+              SnackBar(
+                content: Text('Aumentos aplicados correctamente'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        });
       }
     });
   }
@@ -1844,19 +1856,7 @@ class _HomeScreenState extends State<HomeScreen>
   // Método para guardar un inquilino en el almacenamiento
   Future<void> _guardarInquilino(Inquilino inquilino) async {
     try {
-      // Guardar los datos del inquilino
-      final prefs = await SharedPreferences.getInstance();
-      final List<String> inquilinosIds = prefs.getStringList('inquilinos_ids') ?? [];
-      
-      // Si el ID no está en la lista, añadirlo
-      if (!inquilinosIds.contains(inquilino.id)) {
-        inquilinosIds.add(inquilino.id);
-        await prefs.setStringList('inquilinos_ids', inquilinosIds);
-      }
-      
-      // Guardar los datos del inquilino
-      final String inquilinoJson = jsonEncode(inquilino.toMap());
-      await prefs.setString('inquilino_${inquilino.id}', inquilinoJson);
+      log.i('Guardando inquilino: ${inquilino.nombre} ${inquilino.apellido}');
       
       // Verificar si el widget sigue montado antes de actualizar el estado
       if (!mounted) return;
@@ -1874,11 +1874,14 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
       
+      // Guardar todos los inquilinos utilizando el StorageService
+      await _storageService.saveInquilinos(_inquilinos);
+      
       // Actualizar los totales
       final mesAnio = DateFormat('MM-yyyy').format(_selectedDate);
       _calcularTotalesRecibidos(_inquilinos, mesAnio);
       
-      log.i('Inquilino guardado: ${inquilino.nombre} ${inquilino.apellido}');
+      log.i('Inquilino guardado exitosamente');
     } catch (e) {
       log.e('Error al guardar inquilino: $e');
       if (mounted) {

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../services/log_service.dart';
+import 'package:intl/intl.dart';
 
 // Enum para el método de pago
 enum MetodoPago {
@@ -38,7 +39,12 @@ class Inquilino {
   final Map<String, double> preciosAlquilerPorMes;  // Mapa para precios históricos
 
   // Getter para obtener el precio actual del alquiler
-  double get precioAlquiler => _precioAlquilerBase;
+  double get precioAlquiler {
+    // Obtener el mes actual
+    final mesActual = DateFormat('MM-yyyy').format(DateTime.now());
+    // Devolver el precio específico para este mes si existe, de lo contrario devolver el precio base
+    return preciosAlquilerPorMes[mesActual] ?? _precioAlquilerBase;
+  }
 
   Inquilino({
     required this.id,
@@ -91,8 +97,65 @@ class Inquilino {
 
   // Obtener el precio de alquiler para un mes específico
   double getPrecioAlquilerPorMes(String mesAnio) {
+    log.d('Obteniendo precio para $mesAnio, mapa: ${preciosAlquilerPorMes.length} entradas');
+    
     // Si hay un precio específico para este mes, devolver ese
-    return preciosAlquilerPorMes[mesAnio] ?? _precioAlquilerBase;
+    if (preciosAlquilerPorMes.containsKey(mesAnio)) {
+      log.d('Precio encontrado directamente para $mesAnio: ${preciosAlquilerPorMes[mesAnio]}');
+      return preciosAlquilerPorMes[mesAnio]!;
+    }
+    
+    // Obtener mes y año del parámetro
+    final partes = mesAnio.split('-');
+    if (partes.length != 2) {
+      log.d('Formato de fecha inválido: $mesAnio, usando precio base: $_precioAlquilerBase');
+      return _precioAlquilerBase;
+    }
+    
+    final mesNum = int.tryParse(partes[0]) ?? 0;
+    final anioNum = int.tryParse(partes[1]) ?? 0;
+    
+    if (mesNum <= 0 || anioNum <= 0) {
+      log.d('Números de mes/año inválidos: $mesAnio, usando precio base: $_precioAlquilerBase');
+      return _precioAlquilerBase;
+    }
+    
+    // Buscar el precio más reciente anterior a esta fecha
+    String? mesReciente;
+    DateTime fechaReciente = DateTime(1900);
+    DateTime fechaActual = DateTime(anioNum, mesNum, 1);
+    
+    // Mostrar todas las fechas disponibles para depuración
+    log.d('Fechas disponibles en preciosAlquilerPorMes: ${preciosAlquilerPorMes.keys.toList().join(", ")}');
+    
+    for (final key in preciosAlquilerPorMes.keys) {
+      final partesMes = key.split('-');
+      if (partesMes.length != 2) continue;
+      
+      final mesItem = int.tryParse(partesMes[0]) ?? 0;
+      final anioItem = int.tryParse(partesMes[1]) ?? 0;
+      
+      if (mesItem <= 0 || anioItem <= 0) continue;
+      
+      final fechaItem = DateTime(anioItem, mesItem, 1);
+      
+      // Si esta fecha es anterior a la fecha actual pero más reciente que la encontrada hasta ahora
+      if (fechaItem.isBefore(fechaActual) && fechaItem.isAfter(fechaReciente)) {
+        fechaReciente = fechaItem;
+        mesReciente = key;
+        log.d('Encontrada fecha más reciente: $mesReciente (${preciosAlquilerPorMes[mesReciente]})');
+      }
+    }
+    
+    // Si encontramos un mes anterior, devolver su precio
+    if (mesReciente != null) {
+      log.d('Usando precio histórico para $mesAnio desde $mesReciente: ${preciosAlquilerPorMes[mesReciente]}');
+      return preciosAlquilerPorMes[mesReciente]!;
+    }
+    
+    // Si no hay precio para este mes ni para meses anteriores, devolver el precio base
+    log.d('No se encontró precio histórico para $mesAnio, usando precio base: $_precioAlquilerBase');
+    return _precioAlquilerBase;
   }
 
   // Aplicar un aumento de alquiler preservando el historial
@@ -128,9 +191,14 @@ class Inquilino {
       }
     }
     
-    // Crear una nueva instancia con el nuevo precio base y el historial actualizado
+    // Guardar el nuevo precio para el mes actual y futuros
+    nuevosPreciosHistoricos[mesActual] = nuevoPrecio;
+    log.d('Guardando nuevo precio para $mesActual: $nuevoPrecio');
+    
+    // Crear una nueva instancia actualizando tanto el precio base como el historial
+    // Es necesario actualizar el precio base para que se muestre correctamente en todas las partes de la app
     return inquilino.copyWith(
-      precioAlquiler: nuevoPrecio,
+      precioAlquiler: nuevoPrecio,  // Actualizamos el precio base para reflejarlo en toda la app
       preciosAlquilerPorMes: nuevosPreciosHistoricos,
     );
   }

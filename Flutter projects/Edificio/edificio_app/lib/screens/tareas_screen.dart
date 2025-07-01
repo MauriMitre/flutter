@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:edificio_app/models/inquilino.dart';
 import 'package:edificio_app/models/tarea.dart';
 import 'package:edificio_app/services/storage_service.dart';
+import 'package:edificio_app/services/log_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 
@@ -11,10 +12,10 @@ class TareasScreen extends StatefulWidget {
   const TareasScreen({Key? key, required this.inquilinos}) : super(key: key);
 
   @override
-  _TareasScreenState createState() => _TareasScreenState();
+  TareasScreenState createState() => TareasScreenState();
 }
 
-class _TareasScreenState extends State<TareasScreen> {
+class TareasScreenState extends State<TareasScreen> {
   final StorageService _storageService = StorageService();
   List<Tarea> _tareas = [];
   bool _isLoading = true;
@@ -32,14 +33,19 @@ class _TareasScreenState extends State<TareasScreen> {
     
     try {
       final tareas = await _storageService.loadTareas();
+      if (!mounted) return;
+      
       setState(() {
         _tareas = tareas;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      if (!mounted) return;
+      
       setState(() {
         _isLoading = false;
       });
+      log.e('Error al cargar tareas', e, stackTrace);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al cargar tareas: $e')),
       );
@@ -168,7 +174,12 @@ class _TareasScreenState extends State<TareasScreen> {
     try {
       await _storageService.saveTarea(nuevaTarea, _tareas);
       await _cargarTareas();
+      if (!mounted) return;
+      
     } catch (e) {
+      if (!mounted) return;
+      
+      log.e('Error al actualizar tarea', e);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al actualizar tarea: $e')),
       );
@@ -200,12 +211,14 @@ class _TareasScreenState extends State<TareasScreen> {
         await _cargarTareas();
         
         if (mounted) {
+          log.i('Tarea eliminada con éxito');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Tarea eliminada con éxito')),
           );
         }
       } catch (e) {
         if (mounted) {
+          log.e('Error al eliminar tarea', e);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error al eliminar tarea: $e')),
           );
@@ -301,6 +314,7 @@ class _TareasScreenState extends State<TareasScreen> {
                     ElevatedButton(
                       onPressed: () {
                         if (tituloController.text.trim().isEmpty) {
+                          log.e('El título es obligatorio');
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('El título es obligatorio')),
                           );
@@ -340,12 +354,14 @@ class _TareasScreenState extends State<TareasScreen> {
         await _cargarTareas();
         
         if (mounted) {
+          log.i('Tarea agregada con éxito');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(tarea == null ? 'Tarea agregada con éxito' : 'Tarea actualizada con éxito')),
           );
         }
       } catch (e) {
         if (mounted) {
+          log.e('Error al guardar tarea', e);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error al guardar tarea: $e')),
           );

@@ -5,10 +5,10 @@ import '../models/tarea.dart';
 import '../models/documento.dart';
 import 'package:uuid/uuid.dart';
 import '../models/cuenta_transferencia.dart';
+import 'log_service.dart';
 
 class StorageService {
   static const String _inquilinosKey = 'inquilinos';
-  static const String _expensasKey = 'expensas';
   static const String _tareasKey = 'tareas';
   static const String _inquilinosInicializadosKey = 'inquilinos_inicializados';
   static const String _cuentasTransferenciaKey = 'cuentas_transferencia';
@@ -24,13 +24,15 @@ class StorageService {
       try {
         return jsonEncode(i.toMap());
       } catch (e) {
-        print('Error al codificar inquilino: $e');
+        log.e("Error al codificar inquilino", e, StackTrace.current);
         return null;
       }
     }).where((json) => json != null).toList().cast<String>();
     
     // Guardar en SharedPreferences
     await prefs.setStringList(_inquilinosKey, jsonInquilinos);
+    
+    log.d("Guardados ${jsonInquilinos.length} inquilinos");
   }
 
   // Método para cargar inquilinos (optimizado)
@@ -44,17 +46,17 @@ class StorageService {
     final inquilinosInicializados = prefs.getBool(_inquilinosInicializadosKey) ?? false;
     
     if (jsonInquilinos == null || jsonInquilinos.isEmpty) {
-      print('No se encontraron inquilinos guardados');
+      // No se encontraron inquilinos guardados
       
       // Si no hay inquilinos o la lista está vacía, crear inquilinos predefinidos
       if (!inquilinosInicializados) {
-        print('Inicializando inquilinos predefinidos...');
+        log.i("Inicializando inquilinos predefinidos...");
         final predefinidos = _crearInquilinosPredefinidos();
         await saveInquilinos(predefinidos);
         
         // Marcar como inicializados
         await prefs.setBool(_inquilinosInicializadosKey, true);
-        print('Inquilinos predefinidos inicializados: ${predefinidos.length}');
+        log.i("Inquilinos predefinidos inicializados: ${predefinidos.length}");
         
         return predefinidos;
       }
@@ -74,28 +76,11 @@ class StorageService {
           inquilinos.add(inquilino);
         }
       } catch (e) {
-        print('Error al decodificar inquilino: $e');
+        log.e("Error al decodificar inquilino", e, StackTrace.current);
       }
     }
     
     return inquilinos;
-  }
-
-  // Inicializar inquilinos predefinidos
-  Future<void> _inicializarInquilinosPredefinidos() async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    // Crear inquilinos predefinidos
-    final predefinidos = _crearInquilinosPredefinidos();
-    
-    // Convertir a JSON y guardar
-    final inquilinosJson = predefinidos.map((i) => jsonEncode(i.toMap())).toList();
-    await prefs.setStringList(_inquilinosKey, inquilinosJson);
-    
-    // Marcar como inicializados
-    await prefs.setBool(_inquilinosInicializadosKey, true);
-    
-    print("Se han inicializado ${predefinidos.length} inquilinos predefinidos");
   }
 
   // Guardar expensas comunes para un mes específico
@@ -109,18 +94,25 @@ class StorageService {
       // Guardar directamente como double
       await prefs.setDouble(clave, monto);
       
-      print('Expensas guardadas exitosamente: $clave = $monto');
+      log.d("Expensas guardadas exitosamente: $clave = $monto");
     } catch (e) {
-      print('Error guardando expensas: $e');
+      log.e("Error guardando expensas", e, StackTrace.current);
       rethrow;
     }
   }
 
   // Método para cargar expensas de un mes específico
   Future<double> loadExpensas(String mesAnio) async {
-    final prefs = await SharedPreferences.getInstance();
-    final expensasMap = await loadExpensasComunes();
-    return expensasMap[mesAnio] ?? 0.0;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final clave = 'expensa_$mesAnio';
+      final valor = prefs.getDouble(clave) ?? 0.0;
+      log.d("Cargadas expensas para $mesAnio: $valor");
+      return valor;
+    } catch (e) {
+      log.e("Error cargando expensas para $mesAnio", e, StackTrace.current);
+      return 0.0;
+    }
   }
   
   // Método para cargar todas las expensas comunes
@@ -130,6 +122,7 @@ class StorageService {
     // Obtener JSON de expensas comunes
     final expensasJson = prefs.getString(_expensasComunesKey);
     if (expensasJson == null) {
+      log.d("No se encontraron expensas comunes guardadas");
       return {};
     }
     
@@ -138,7 +131,7 @@ class StorageService {
       final expensasMap = jsonDecode(expensasJson) as Map<String, dynamic>;
       
       // Convertir valores a double
-      return expensasMap.map((key, value) {
+      final result = expensasMap.map((key, value) {
         if (value is int) {
           return MapEntry(key, value.toDouble());
         } else if (value is double) {
@@ -147,8 +140,11 @@ class StorageService {
           return MapEntry(key, (value as num).toDouble());
         }
       });
+      
+      log.d("Cargadas ${result.length} expensas comunes");
+      return result;
     } catch (e) {
-      print('Error al cargar expensas comunes: $e');
+      log.e("Error al cargar expensas comunes", e, StackTrace.current);
       return {};
     }
   }
@@ -201,7 +197,7 @@ class StorageService {
       try {
         return jsonEncode(c.toMap());
       } catch (e) {
-        print('Error al codificar cuenta: $e');
+        // Error al codificar cuenta: $e
         return null;
       }
     }).where((json) => json != null).toList().cast<String>();
@@ -233,7 +229,7 @@ class StorageService {
           cuentas.add(cuenta);
         }
       } catch (e) {
-        print('Error al decodificar cuenta: $e');
+        // Error al decodificar cuenta: $e
       }
     }
     
@@ -242,7 +238,7 @@ class StorageService {
 
   // Método para crear inquilinos predefinidos
   List<Inquilino> _crearInquilinosPredefinidos() {
-    print("Creando inquilinos predefinidos...");
+    // Creando inquilinos predefinidos...
     
     // Generar IDs únicos
     return [
@@ -398,7 +394,7 @@ class StorageService {
       try {
         return jsonEncode(d.toMap());
       } catch (e) {
-        print('Error al codificar documento: $e');
+        // Error al codificar documento: $e
         return null;
       }
     }).where((json) => json != null).toList().cast<String>();
@@ -430,7 +426,7 @@ class StorageService {
           documentos.add(documento);
         }
       } catch (e) {
-        print('Error al decodificar documento: $e');
+        // Error al decodificar documento: $e
       }
     }
     

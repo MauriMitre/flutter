@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:open_file/open_file.dart';
-import 'package:flutter/services.dart';
 import '../models/inquilino.dart';
 import '../models/documento.dart';
 import '../services/storage_service.dart';
@@ -20,10 +19,10 @@ class DocumentosInquilinoScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _DocumentosInquilinoScreenState createState() => _DocumentosInquilinoScreenState();
+  DocumentosInquilinoScreenState createState() => DocumentosInquilinoScreenState();
 }
 
-class _DocumentosInquilinoScreenState extends State<DocumentosInquilinoScreen> {
+class DocumentosInquilinoScreenState extends State<DocumentosInquilinoScreen> {
   final StorageService _storageService = StorageService();
   final FileService _fileService = FileService();
   final ImagePicker _picker = ImagePicker();
@@ -70,7 +69,7 @@ class _DocumentosInquilinoScreenState extends State<DocumentosInquilinoScreen> {
         await _agregarPDF(tipo);
       }
     } catch (e) {
-      print('Error general al agregar documento: $e');
+      // Error general al agregar documento: $e
       _mostrarError('Error al agregar documento: $e');
     }
   }
@@ -88,7 +87,7 @@ class _DocumentosInquilinoScreenState extends State<DocumentosInquilinoScreen> {
         pickedFile = await _picker.pickImage(source: ImageSource.gallery);
       }
     } catch (e) {
-      print('Error al seleccionar imagen: $e');
+      // Error al seleccionar imagen: $e
       _mostrarError('Error al seleccionar imagen: $e');
       return;
     }
@@ -109,7 +108,7 @@ class _DocumentosInquilinoScreenState extends State<DocumentosInquilinoScreen> {
       
       await _procesarArchivo(file, fileName, tipo);
     } catch (e) {
-      print('Error al seleccionar PDF: $e');
+      // Error al seleccionar PDF: $e
       _mostrarError('Error al seleccionar PDF: $e');
     }
   }
@@ -154,7 +153,7 @@ class _DocumentosInquilinoScreenState extends State<DocumentosInquilinoScreen> {
       
       return result;
     } catch (e) {
-      print('Error al seleccionar PDF: $e');
+      // Error al seleccionar PDF: $e
       return null;
     }
   }

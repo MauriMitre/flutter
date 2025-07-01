@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -11,11 +10,11 @@ class DocumentationGenerator {
     final pdf = pw.Document();
     
     // Colores para el PDF
-    final colorPrimario = PdfColors.blue700;
-    final colorSecundario = PdfColors.blue200;
-    final colorTextoClaro = PdfColors.white;
-    final colorResaltado = PdfColors.blue900;
-    final colorSecundarioSuave = PdfColors.blue50;
+    const colorPrimario = PdfColors.blue700;
+    const colorSecundario = PdfColors.blue200;
+    const colorTextoClaro = PdfColors.white;
+    const colorResaltado = PdfColors.blue900;
+    const colorSecundarioSuave = PdfColors.blue50;
     
     // Portada
     pdf.addPage(

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 class MonthYearPicker extends StatefulWidget {
   final DateTime initialDate;
@@ -10,10 +9,10 @@ class MonthYearPicker extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _MonthYearPickerState createState() => _MonthYearPickerState();
+  MonthYearPickerState createState() => MonthYearPickerState();
 }
 
-class _MonthYearPickerState extends State<MonthYearPicker> {
+class MonthYearPickerState extends State<MonthYearPicker> {
   late int _selectedYear;
   late int _selectedMonth;
   

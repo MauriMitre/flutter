@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:edificio_app/models/inquilino.dart';
 import 'package:uuid/uuid.dart';
+import 'package:intl/intl.dart';
 
 class AgregarInquilinoScreen extends StatefulWidget {
   final Inquilino? inquilino;
@@ -8,15 +9,16 @@ class AgregarInquilinoScreen extends StatefulWidget {
   const AgregarInquilinoScreen({Key? key, this.inquilino}) : super(key: key);
 
   @override
-  _AgregarInquilinoScreenState createState() => _AgregarInquilinoScreenState();
+  AgregarInquilinoScreenState createState() => AgregarInquilinoScreenState();
 }
 
-class _AgregarInquilinoScreenState extends State<AgregarInquilinoScreen> {
+class AgregarInquilinoScreenState extends State<AgregarInquilinoScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
   final _apellidoController = TextEditingController();
   final _departamentoController = TextEditingController();
   final _precioAlquilerController = TextEditingController();
+  bool _precioModificado = false;
 
   @override
   void initState() {
@@ -26,6 +28,21 @@ class _AgregarInquilinoScreenState extends State<AgregarInquilinoScreen> {
       _apellidoController.text = widget.inquilino!.apellido;
       _departamentoController.text = widget.inquilino!.departamento;
       _precioAlquilerController.text = widget.inquilino!.precioAlquiler.toString();
+      
+      // Detectar cambios en el precio del alquiler
+      _precioAlquilerController.addListener(() {
+        if (widget.inquilino != null && 
+            _precioAlquilerController.text.isNotEmpty &&
+            double.tryParse(_precioAlquilerController.text) != widget.inquilino!.precioAlquiler) {
+          setState(() {
+            _precioModificado = true;
+          });
+        } else {
+          setState(() {
+            _precioModificado = false;
+          });
+        }
+      });
     }
   }
 
@@ -99,11 +116,15 @@ class _AgregarInquilinoScreenState extends State<AgregarInquilinoScreen> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _precioAlquilerController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Precio del alquiler',
                   hintText: 'Ingrese el precio mensual',
                   prefixText: '\$',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  helperText: _precioModificado && widget.inquilino != null
+                      ? 'El nuevo precio se aplicará desde el mes actual en adelante'
+                      : null,
+                  helperStyle: const TextStyle(color: Colors.blue),
                 ),
                 keyboardType: TextInputType.number,
                 validator: (value) {
@@ -136,17 +157,37 @@ class _AgregarInquilinoScreenState extends State<AgregarInquilinoScreen> {
 
   void _guardarInquilino() {
     if (_formKey.currentState!.validate()) {
+      final double nuevoPrecio = double.parse(_precioAlquilerController.text);
+      
+      // Crear un mapa de precios de alquiler por mes
+      Map<String, double> preciosAlquilerPorMes = {};
+      
+      // Si estamos editando un inquilino existente y el precio ha cambiado
+      if (widget.inquilino != null && _precioModificado) {
+        // Copiar los precios históricos existentes
+        preciosAlquilerPorMes = Map.from(widget.inquilino!.preciosAlquilerPorMes);
+        
+        // Obtener el mes actual en formato MM-yyyy
+        final mesActual = DateFormat('MM-yyyy').format(DateTime.now());
+        
+        // Guardar el nuevo precio para el mes actual
+        preciosAlquilerPorMes[mesActual] = nuevoPrecio;
+      }
+      
       final inquilino = Inquilino(
         id: widget.inquilino?.id ?? const Uuid().v4(),
         nombre: _nombreController.text,
         apellido: _apellidoController.text,
         departamento: _departamentoController.text,
-        precioAlquiler: double.parse(_precioAlquilerController.text),
+        precioAlquiler: nuevoPrecio,
         pagos: widget.inquilino?.pagos ?? {},
         expensas: widget.inquilino?.expensas ?? {},
         pagosAlquiler: widget.inquilino?.pagosAlquiler ?? {},
         pagosExpensas: widget.inquilino?.pagosExpensas ?? {},
         montosPendientes: widget.inquilino?.montosPendientes ?? {},
+        metodosPago: widget.inquilino?.metodosPago ?? {},
+        cuentasTransferencia: widget.inquilino?.cuentasTransferencia ?? {},
+        preciosAlquilerPorMes: preciosAlquilerPorMes,
       );
 
       Navigator.pop(context, inquilino);

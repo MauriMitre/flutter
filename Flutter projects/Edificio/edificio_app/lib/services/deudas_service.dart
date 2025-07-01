@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/services.dart';
+
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -23,14 +23,14 @@ class DeudasService {
     final DateTime now = DateTime.now();
     
     // Colores principales para el PDF
-    final colorPrimario = PdfColors.red700;
-    final colorSecundario = PdfColors.red200;
-    final colorTextoClaro = PdfColors.white;
-    final colorFilaAlternada = PdfColors.grey100;
-    final colorResaltado = PdfColors.red900;
-    final colorSecundarioSuave = PdfColors.red50;
-    final colorNegroSombra = PdfColors.grey800;
-    final colorPrimarioSuave = PdfColors.red100;
+    const colorPrimario = PdfColors.red700;
+    const colorSecundario = PdfColors.red200;
+    const colorTextoClaro = PdfColors.white;
+    const colorFilaAlternada = PdfColors.grey100;
+    const colorResaltado = PdfColors.red900;
+    const colorSecundarioSuave = PdfColors.red50;
+    const colorNegroSombra = PdfColors.grey800;
+    const colorPrimarioSuave = PdfColors.red100;
     
     // Recopilar todas las deudas del inquilino
     final deudas = <Map<String, dynamic>>[];
@@ -44,9 +44,9 @@ class DeudasService {
     final int mesActual = now.month;
     
     // Definir año mínimo (2025)
-    final int anioMinimo = 2025;
+    const int anioMinimo = 2025;
     
-    print('Año mínimo para deudas: $anioMinimo');
+    // Año mínimo para deudas: $anioMinimo
     
     // Agregar todos los meses hasta el mes actual, pero solo desde el año mínimo
     for (int anio = anioActual; anio >= anioMinimo; anio--) {
@@ -104,11 +104,11 @@ class DeudasService {
       }
     }
     
-    // Imprimir información de depuración inicial
-    print('Generando deudas para ${inquilino.nombre} ${inquilino.apellido}');
-    print('Precio de alquiler: $precioAlquiler');
-    print('Expensas predeterminadas: $expensasPredeterminadas');
-    print('Meses a procesar: $mesesRegistrados');
+    // Información de depuración inicial
+    // Generando deudas para ${inquilino.nombre} ${inquilino.apellido}
+    // Precio de alquiler: $precioAlquiler
+    // Expensas predeterminadas: $expensasPredeterminadas
+    // Meses a procesar: $mesesRegistrados
     
     // Para cada mes hasta el actual, generar deudas
     for (final mesAnio in mesesRegistrados) {
@@ -122,9 +122,9 @@ class DeudasService {
       final bool pagadoAlquiler = inquilino.pagosAlquiler.containsKey(mesAnio) && inquilino.pagosAlquiler[mesAnio] == true;
       final bool pagadoExpensas = inquilino.pagosExpensas.containsKey(mesAnio) && inquilino.pagosExpensas[mesAnio] == true;
       
-      print('Procesando mes: $mesAnio (${fechaFormateada})');
-      print('  - Alquiler pagado: $pagadoAlquiler');
-      print('  - Expensas pagadas: $pagadoExpensas');
+      // Procesando mes: $mesAnio ($fechaFormateada)
+      //  - Alquiler pagado: $pagadoAlquiler
+      //  - Expensas pagadas: $pagadoExpensas
       
       // Agregar deuda de alquiler si no está pagado
       if (!pagadoAlquiler) {
@@ -135,7 +135,7 @@ class DeudasService {
           'monto': precioAlquiler,
         });
         totalDeuda += precioAlquiler;
-        print('  - Agregada deuda de alquiler: \$${precioAlquiler.toStringAsFixed(2)}');
+        //  - Agregada deuda de alquiler: \$${precioAlquiler.toStringAsFixed(2)}
       }
       
       // Agregar deuda de expensas si no está pagado
@@ -153,7 +153,7 @@ class DeudasService {
           'monto': expensasMes,
         });
         totalDeuda += expensasMes;
-        print('  - Agregada deuda de expensas: \$${expensasMes.toStringAsFixed(2)}');
+        //  - Agregada deuda de expensas: \$${expensasMes.toStringAsFixed(2)}
       }
       
       // Agregar montos pendientes si existen
@@ -166,13 +166,13 @@ class DeudasService {
           'monto': montoPendiente,
         });
         totalDeuda += montoPendiente;
-        print('  - Agregado monto pendiente: \$${montoPendiente.toStringAsFixed(2)}');
+        //  - Agregado monto pendiente: \$${montoPendiente.toStringAsFixed(2)}
       }
     }
     
     // Verificar si hay deudas
     if (deudas.isEmpty) {
-      print('¡ALERTA! No se generaron deudas para el inquilino.');
+      // ¡ALERTA! No se generaron deudas para el inquilino.
       // Agregar al menos una fila de ejemplo para asegurar que la tabla no esté vacía
       final mesActualStr = mesActual < 10 ? '0$mesActual' : '$mesActual';
       final mesAnioActual = '$mesActualStr-$anioActual';
@@ -185,7 +185,7 @@ class DeudasService {
         'monto': 0.0,
       });
       totalDeuda = 0.0;
-      print('  - Agregada fila indicando que no hay deudas pendientes');
+      //  - Agregada fila indicando que no hay deudas pendientes
     }
     
     // Ordenar deudas por fecha (más recientes primero)
@@ -208,11 +208,11 @@ class DeudasService {
       return mesB.compareTo(mesA); // Orden descendente por mes
     });
     
-    print('Total de deudas generadas: ${deudas.length}');
-    print('Monto total de deuda: \$${totalDeuda.toStringAsFixed(2)}');
+    // Total de deudas generadas: ${deudas.length}
+    // Monto total de deuda: \$${totalDeuda.toStringAsFixed(2)}
     
     // Dividir las deudas en grupos para manejar múltiples páginas si es necesario
-    final int deudasPorPagina = 15; // Máximo de filas por página
+    const int deudasPorPagina = 15; // Máximo de filas por página
     final List<List<Map<String, dynamic>>> grupoDeudas = [];
     
     for (int i = 0; i < deudas.length; i += deudasPorPagina) {
@@ -240,9 +240,9 @@ class DeudasService {
                 // Cabecera con título
                 pw.Container(
                   padding: const pw.EdgeInsets.symmetric(vertical: 20, horizontal: 15),
-                  decoration: pw.BoxDecoration(
+                  decoration: const pw.BoxDecoration(
                     color: colorPrimario,
-                    borderRadius: const pw.BorderRadius.only(
+                    borderRadius: pw.BorderRadius.only(
                       topLeft: pw.Radius.circular(10),
                       topRight: pw.Radius.circular(10),
                     ),
@@ -250,7 +250,7 @@ class DeudasService {
                       pw.BoxShadow(
                         color: colorNegroSombra,
                         blurRadius: 3,
-                        offset: const PdfPoint(0, 2),
+                        offset: PdfPoint(0, 2),
                       ),
                     ],
                   ),
@@ -271,7 +271,7 @@ class DeudasService {
                           pw.SizedBox(height: 5),
                           pw.Text(
                             'Pagos pendientes (desde 2025)',
-                            style: pw.TextStyle(
+                            style: const pw.TextStyle(
                               fontSize: 16,
                               color: colorTextoClaro,
                             ),
@@ -283,14 +283,14 @@ class DeudasService {
                         children: [
                           pw.Text(
                             'Fecha: $fechaActual',
-                            style: pw.TextStyle(
+                            style: const pw.TextStyle(
                               fontSize: 12,
                               color: colorTextoClaro,
                             ),
                           ),
                           pw.Text(
                             'Hora: $horaActual',
-                            style: pw.TextStyle(
+                            style: const pw.TextStyle(
                               fontSize: 12,
                               color: colorTextoClaro,
                             ),
@@ -298,7 +298,7 @@ class DeudasService {
                           if (grupoDeudas.length > 1)
                             pw.Text(
                               'Página ${pageIndex + 1} de ${grupoDeudas.length}',
-                              style: pw.TextStyle(
+                              style: const pw.TextStyle(
                                 fontSize: 12,
                                 color: colorTextoClaro,
                               ),
@@ -429,7 +429,7 @@ class DeudasService {
                   children: [
                     // Encabezado de la tabla
                     pw.TableRow(
-                      decoration: pw.BoxDecoration(
+                      decoration: const pw.BoxDecoration(
                         color: colorPrimario,
                       ),
                       children: [
@@ -474,8 +474,8 @@ class DeudasService {
                       final deuda = entry.value;
                       final bool filaAlternada = index % 2 == 1;
                       
-                      // Imprimir información de depuración de cada fila
-                      print('Renderizando fila $index: ${deuda['periodo']} - ${deuda['concepto']} - \$${(deuda['monto'] as double).toStringAsFixed(2)}');
+                      // Información de depuración de cada fila
+                      // Renderizando fila $index: ${deuda['periodo']} - ${deuda['concepto']} - \$${(deuda['monto'] as double).toStringAsFixed(2)}
                       
                       return pw.TableRow(
                         decoration: pw.BoxDecoration(
@@ -512,7 +512,7 @@ class DeudasService {
                     // Fila de total (solo en la última página)
                     if (pageIndex == grupoDeudas.length - 1)
                       pw.TableRow(
-                        decoration: pw.BoxDecoration(
+                        decoration: const pw.BoxDecoration(
                           color: colorPrimarioSuave,
                         ),
                         children: [
@@ -583,20 +583,17 @@ class DeudasService {
       );
     }
     
-    // Imprimir información de depuración
-    print('Generando PDF de deudas para ${inquilino.nombre} ${inquilino.apellido}');
-    print('Cantidad de deudas generadas: ${deudas.length}');
-    print('Detalles de las deudas:');
-    for (var deuda in deudas) {
-      print('  - ${deuda['periodo']} - ${deuda['concepto']} - \$${(deuda['monto'] as double).toStringAsFixed(2)}');
-    }
+    // Información de depuración
+    // Generando PDF de deudas para ${inquilino.nombre} ${inquilino.apellido}
+    // Cantidad de deudas generadas: ${deudas.length}
+    // Detalles de las deudas - omitidos para evitar logs extensos
     
     // Guardar el PDF
     final output = await getTemporaryDirectory();
     final file = File('${output.path}/deudas_${inquilino.apellido}_${inquilino.nombre}_${DateTime.now().millisecondsSinceEpoch}.pdf');
     await file.writeAsBytes(await pdf.save());
     
-    print('PDF guardado en: ${file.path}');
+    // PDF guardado en: ${file.path}
     
     // Abrir el PDF
     await OpenFile.open(file.path);
@@ -608,7 +605,7 @@ class DeudasService {
   bool tieneDeudas(Inquilino inquilino) {
     // Para la funcionalidad de deudas a partir de 2025, siempre devolvemos true
     // ya que queremos mostrar el botón para todos los inquilinos
-    print('Verificando si ${inquilino.nombre} ${inquilino.apellido} tiene deudas: true (forzado)');
+    // Verificando si ${inquilino.nombre} ${inquilino.apellido} tiene deudas: true (forzado)
     return true;
   }
 }

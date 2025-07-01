@@ -8,10 +8,10 @@ class ExpensasEditorScreen extends StatefulWidget {
   const ExpensasEditorScreen({Key? key, required this.mesAnio}) : super(key: key);
 
   @override
-  _ExpensasEditorScreenState createState() => _ExpensasEditorScreenState();
+  ExpensasEditorScreenState createState() => ExpensasEditorScreenState();
 }
 
-class _ExpensasEditorScreenState extends State<ExpensasEditorScreen> {
+class ExpensasEditorScreenState extends State<ExpensasEditorScreen> {
   List<ExpensaItem> _items = [];
   bool _isLoading = true;
   late String _fechaFormateada;

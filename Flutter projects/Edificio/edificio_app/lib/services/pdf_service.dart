@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/services.dart';
+
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -53,14 +53,14 @@ class PdfService {
     final horaActual = DateFormat('HH:mm', 'es_ES').format(DateTime.now());
     
     // Colores principales para el PDF
-    final colorPrimario = PdfColors.blue700;
-    final colorSecundario = PdfColors.blue200;
-    final colorTextoClaro = PdfColors.white;
-    final colorFilaAlternada = PdfColors.grey100;
-    final colorResaltado = PdfColors.blue900;
-    final colorSecundarioSuave = PdfColors.blue50;
-    final colorNegroSombra = PdfColors.grey800;
-    final colorPrimarioSuave = PdfColors.blue100;
+    const colorPrimario = PdfColors.blue700;
+    const colorSecundario = PdfColors.blue200;
+    const colorTextoClaro = PdfColors.white;
+    const colorFilaAlternada = PdfColors.grey100;
+    const colorResaltado = PdfColors.blue900;
+    const colorSecundarioSuave = PdfColors.blue50;
+    const colorNegroSombra = PdfColors.grey800;
+    const colorPrimarioSuave = PdfColors.blue100;
     
     // Agregar página al PDF
     pdf.addPage(
@@ -74,9 +74,9 @@ class PdfService {
               // Cabecera con título y número de recibo
               pw.Container(
                 padding: const pw.EdgeInsets.symmetric(vertical: 20, horizontal: 15),
-                decoration: pw.BoxDecoration(
+                decoration: const pw.BoxDecoration(
                   color: colorPrimario,
-                  borderRadius: const pw.BorderRadius.only(
+                  borderRadius: pw.BorderRadius.only(
                     topLeft: pw.Radius.circular(10),
                     topRight: pw.Radius.circular(10),
                   ),
@@ -84,7 +84,7 @@ class PdfService {
                     pw.BoxShadow(
                       color: colorNegroSombra,
                       blurRadius: 3,
-                      offset: const PdfPoint(0, 2),
+                      offset: PdfPoint(0, 2),
                     ),
                   ],
                 ),
@@ -105,7 +105,7 @@ class PdfService {
                         pw.SizedBox(height: 5),
                         pw.Text(
                           fechaFormateada.toUpperCase(),
-                          style: pw.TextStyle(
+                          style: const pw.TextStyle(
                             fontSize: 16,
                             color: colorTextoClaro,
                           ),
@@ -117,14 +117,14 @@ class PdfService {
                       children: [
                         pw.Text(
                           'Fecha: $fechaActual',
-                          style: pw.TextStyle(
+                          style: const pw.TextStyle(
                             fontSize: 12,
                             color: colorTextoClaro,
                           ),
                         ),
                         pw.Text(
                           'Hora: $horaActual',
-                          style: pw.TextStyle(
+                          style: const pw.TextStyle(
                             fontSize: 12,
                             color: colorTextoClaro,
                           ),
@@ -243,13 +243,13 @@ class PdfService {
               
               // Detalle del pago
               pw.Container(
-                decoration: pw.BoxDecoration(
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+                decoration: const pw.BoxDecoration(
+                  borderRadius: pw.BorderRadius.all(pw.Radius.circular(10)),
                   boxShadow: [
                     pw.BoxShadow(
                       color: colorNegroSombra,
                       blurRadius: 3,
-                      offset: const PdfPoint(0, 1),
+                      offset: PdfPoint(0, 1),
                     ),
                   ],
                 ),
@@ -347,9 +347,9 @@ class PdfService {
                             // Fila de total
                             pw.Container(
                               padding: const pw.EdgeInsets.symmetric(vertical: 10, horizontal: 5),
-                              decoration: pw.BoxDecoration(
+                              decoration: const pw.BoxDecoration(
                                 color: colorPrimarioSuave,
-                                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(5)),
+                                borderRadius: pw.BorderRadius.all(pw.Radius.circular(5)),
                               ),
                               child: pw.Row(
                                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -423,8 +423,8 @@ class PdfService {
                       pw.Container(
                         width: 150,
                         height: 50,
-                        decoration: pw.BoxDecoration(
-                          border: const pw.Border(bottom: pw.BorderSide()),
+                        decoration: const pw.BoxDecoration(
+                          border: pw.Border(bottom: pw.BorderSide()),
                         ),
                       ),
                       pw.SizedBox(height: 5),
@@ -439,8 +439,8 @@ class PdfService {
                       pw.Container(
                         width: 150,
                         height: 50,
-                        decoration: pw.BoxDecoration(
-                          border: const pw.Border(bottom: pw.BorderSide()),
+                        decoration: const pw.BoxDecoration(
+                          border: pw.Border(bottom: pw.BorderSide()),
                         ),
                       ),
                       pw.SizedBox(height: 5),
@@ -464,7 +464,7 @@ class PdfService {
                     pw.SizedBox(height: 5),
                     pw.Text(
                       'ESTE RECIBO ES VÁLIDO COMO COMPROBANTE DE PAGO',
-                      style: pw.TextStyle(
+                      style: const pw.TextStyle(
                         fontSize: 8,
                         color: PdfColors.grey600,
                       ),
@@ -514,9 +514,9 @@ class PdfService {
     final fechaGeneracion = DateFormat('dd/MM/yyyy', 'es_ES').format(DateTime.now());
     
     // Datos de administración
-    final administradorNombre = "Mauricio José Mitre";
-    final administradorTel = "3814093864";
-    final administradorEmail = "mitremauricio@gmail.com";
+    const administradorNombre = "Mauricio José Mitre";
+    const administradorTel = "3814093864";
+    const administradorEmail = "mitremauricio@gmail.com";
     
     // Crear lista de artículos de expensas (predeterminada si no se proporcionan artículos personalizados)
     final items = itemsPersonalizados ?? [
@@ -561,16 +561,16 @@ class PdfService {
     }
     
           // Colores principales para el PDF
-      final colorPrimario = PdfColors.blue700;
-      final colorSecundario = PdfColors.blue200;
-      final colorTextoClaro = PdfColors.white;
-      final colorFilaAlternada = PdfColors.grey100;
-      final colorResaltado = PdfColors.blue900;
+      const colorPrimario = PdfColors.blue700;
+      const colorSecundario = PdfColors.blue200;
+      const colorTextoClaro = PdfColors.white;
+      const colorFilaAlternada = PdfColors.grey100;
+      const colorResaltado = PdfColors.blue900;
       
       // Colores adicionales para efectos
-      final colorSecundarioSuave = PdfColors.blue50;
-      final colorNegroSombra = PdfColors.grey800;
-      final colorPrimarioSuave = PdfColors.blue100;
+      const colorSecundarioSuave = PdfColors.blue50;
+      const colorNegroSombra = PdfColors.grey800;
+      const colorPrimarioSuave = PdfColors.blue100;
     
     // Agregar página al PDF
     pdf.addPage(
@@ -584,9 +584,9 @@ class PdfService {
               // Encabezado con título y fecha
               pw.Container(
                 padding: const pw.EdgeInsets.symmetric(vertical: 20, horizontal: 15),
-                decoration: pw.BoxDecoration(
+                decoration: const pw.BoxDecoration(
                   color: colorPrimario,
-                  borderRadius: const pw.BorderRadius.only(
+                  borderRadius: pw.BorderRadius.only(
                     topLeft: pw.Radius.circular(10),
                     topRight: pw.Radius.circular(10),
                   ),
@@ -594,7 +594,7 @@ class PdfService {
                     pw.BoxShadow(
                       color: colorNegroSombra,
                       blurRadius: 3,
-                      offset: const PdfPoint(0, 2),
+                      offset: PdfPoint(0, 2),
                     ),
                   ],
                 ),
@@ -615,7 +615,7 @@ class PdfService {
                         pw.SizedBox(height: 5),
                         pw.Text(
                           fechaFormateada.toUpperCase(),
-                          style: pw.TextStyle(
+                          style: const pw.TextStyle(
                             fontSize: 16,
                             color: colorTextoClaro,
                           ),
@@ -626,15 +626,15 @@ class PdfService {
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
                         pw.Text(
-                          'Documento Nº: EXP-${mesAnio}',
-                          style: pw.TextStyle(
+                          'Documento Nº: EXP-$mesAnio',
+                          style: const pw.TextStyle(
                             fontSize: 12,
                             color: colorTextoClaro,
                           ),
                         ),
                         pw.Text(
                           'Fecha de emisión: $fechaGeneracion',
-                          style: pw.TextStyle(
+                          style: const pw.TextStyle(
                             fontSize: 12,
                             color: colorTextoClaro,
                           ),
@@ -689,13 +689,13 @@ class PdfService {
                       children: [
                         pw.Container(
                           padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 8),
-                          decoration: pw.BoxDecoration(
+                          decoration: const pw.BoxDecoration(
                             color: colorPrimario,
-                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(15)),
+                            borderRadius: pw.BorderRadius.all(pw.Radius.circular(15)),
                           ),
                           child: pw.Text(
                             'Email: $administradorEmail',
-                            style: pw.TextStyle(
+                            style: const pw.TextStyle(
                               fontSize: 10,
                               color: colorTextoClaro,
                             ),
@@ -712,13 +712,13 @@ class PdfService {
               // Sección de detalle de expensas
               pw.Container(
                 width: double.infinity,
-                decoration: pw.BoxDecoration(
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+                decoration: const pw.BoxDecoration(
+                  borderRadius: pw.BorderRadius.all(pw.Radius.circular(10)),
                   boxShadow: [
                     pw.BoxShadow(
                       color: colorNegroSombra,
                       blurRadius: 3,
-                      offset: const PdfPoint(0, 1),
+                      offset: PdfPoint(0, 1),
                     ),
                   ],
                 ),
@@ -833,7 +833,7 @@ class PdfService {
                                 child: pw.Container(
                                   padding: const pw.EdgeInsets.all(8),
                                   alignment: pw.Alignment.centerRight,
-                                  decoration: pw.BoxDecoration(
+                                  decoration: const pw.BoxDecoration(
                                     color: colorSecundarioSuave,
                                     border: pw.Border(
                                       left: pw.BorderSide(
@@ -858,7 +858,7 @@ class PdfService {
                       
                       // Fila de totales
                       pw.Container(
-                        decoration: pw.BoxDecoration(
+                        decoration: const pw.BoxDecoration(
                           color: colorPrimarioSuave,
                           border: pw.Border(
                             top: pw.BorderSide(
@@ -904,7 +904,7 @@ class PdfService {
                               child: pw.Container(
                                 padding: const pw.EdgeInsets.all(8),
                                 alignment: pw.Alignment.centerRight,
-                                decoration: pw.BoxDecoration(
+                                decoration: const pw.BoxDecoration(
                                   color: colorSecundarioSuave,
                                   border: pw.Border(
                                     left: pw.BorderSide(
@@ -957,17 +957,17 @@ class PdfService {
                     ),
                     pw.SizedBox(height: 5),
                     pw.Text(
-                      '• El pago de expensas debe realizarse dentro de los primeros 10 días de cada mes.',
+                      '- El pago de expensas debe realizarse dentro de los primeros 10 días de cada mes.',
                       style: const pw.TextStyle(fontSize: 10),
                     ),
                     pw.SizedBox(height: 3),
                     pw.Text(
-                      '• Los importes de las expensas están sujetos a variaciones según los servicios utilizados en el período.',
+                      '- Los importes de las expensas están sujetos a variaciones según los servicios utilizados en el período.',
                       style: const pw.TextStyle(fontSize: 10),
                     ),
                     pw.SizedBox(height: 3),
                     pw.Text(
-                      '• Para consultas o reclamos, contactar al administrador dentro de los 5 días posteriores a la recepción.',
+                      '- Para consultas o reclamos, contactar al administrador dentro de los 5 días posteriores a la recepción.',
                       style: const pw.TextStyle(fontSize: 10),
                     ),
                   ],
@@ -985,14 +985,14 @@ class PdfService {
                     pw.SizedBox(height: 5),
                     pw.Text(
                       'DOCUMENTO GENERADO ELECTRÓNICAMENTE',
-                      style: pw.TextStyle(
+                      style: const pw.TextStyle(
                         fontSize: 8,
                         color: PdfColors.grey600,
                       ),
                     ),
                     pw.SizedBox(height: 3),
                     pw.Text(
-                      'Edificio - Gestión de Expensas ${DateTime.now().year}',
+                      'Av. Independencia 1578 - Gestión de Expensas ${DateTime.now().year}',
                       style: pw.TextStyle(
                         fontSize: 8,
                         fontWeight: pw.FontWeight.bold,
@@ -1034,14 +1034,14 @@ class PdfService {
     final horaActual = DateFormat('HH:mm', 'es_ES').format(DateTime.now());
     
     // Colores principales para el PDF
-    final colorPrimario = PdfColors.red700;
-    final colorSecundario = PdfColors.red200;
-    final colorTextoClaro = PdfColors.white;
-    final colorFilaAlternada = PdfColors.grey100;
-    final colorResaltado = PdfColors.red900;
-    final colorSecundarioSuave = PdfColors.red50;
-    final colorNegroSombra = PdfColors.grey800;
-    final colorPrimarioSuave = PdfColors.red100;
+    const colorPrimario = PdfColors.red700;
+    const colorSecundario = PdfColors.red200;
+    const colorTextoClaro = PdfColors.white;
+    const colorFilaAlternada = PdfColors.grey100;
+    const colorResaltado = PdfColors.red900;
+    const colorSecundarioSuave = PdfColors.red50;
+    const colorNegroSombra = PdfColors.grey800;
+    const colorPrimarioSuave = PdfColors.red100;
     
     // Recopilar todas las deudas del inquilino
     final deudas = <Map<String, dynamic>>[];
@@ -1049,10 +1049,18 @@ class PdfService {
     
     // Obtener todos los meses con pagos registrados
     final mesesRegistrados = <String>{};
-    inquilino.pagos.keys.forEach((mesAnio) => mesesRegistrados.add(mesAnio));
-    inquilino.pagosAlquiler.keys.forEach((mesAnio) => mesesRegistrados.add(mesAnio));
-    inquilino.pagosExpensas.keys.forEach((mesAnio) => mesesRegistrados.add(mesAnio));
-    inquilino.montosPendientes.keys.forEach((mesAnio) => mesesRegistrados.add(mesAnio));
+    for (var mesAnio in inquilino.pagos.keys) {
+      mesesRegistrados.add(mesAnio);
+    }
+    for (var mesAnio in inquilino.pagosAlquiler.keys) {
+      mesesRegistrados.add(mesAnio);
+    }
+    for (var mesAnio in inquilino.pagosExpensas.keys) {
+      mesesRegistrados.add(mesAnio);
+    }
+    for (var mesAnio in inquilino.montosPendientes.keys) {
+      mesesRegistrados.add(mesAnio);
+    }
     
     // Para cada mes, verificar si hay deudas
     for (final mesAnio in mesesRegistrados) {
@@ -1133,9 +1141,9 @@ class PdfService {
               // Cabecera con título
               pw.Container(
                 padding: const pw.EdgeInsets.symmetric(vertical: 20, horizontal: 15),
-                decoration: pw.BoxDecoration(
+                decoration: const pw.BoxDecoration(
                   color: colorPrimario,
-                  borderRadius: const pw.BorderRadius.only(
+                  borderRadius: pw.BorderRadius.only(
                     topLeft: pw.Radius.circular(10),
                     topRight: pw.Radius.circular(10),
                   ),
@@ -1143,7 +1151,7 @@ class PdfService {
                     pw.BoxShadow(
                       color: colorNegroSombra,
                       blurRadius: 3,
-                      offset: const PdfPoint(0, 2),
+                      offset: PdfPoint(0, 2),
                     ),
                   ],
                 ),
@@ -1164,7 +1172,7 @@ class PdfService {
                         pw.SizedBox(height: 5),
                         pw.Text(
                           'Detalle de pagos pendientes',
-                          style: pw.TextStyle(
+                          style: const pw.TextStyle(
                             fontSize: 16,
                             color: colorTextoClaro,
                           ),
@@ -1176,14 +1184,14 @@ class PdfService {
                       children: [
                         pw.Text(
                           'Fecha: $fechaActual',
-                          style: pw.TextStyle(
+                          style: const pw.TextStyle(
                             fontSize: 12,
                             color: colorTextoClaro,
                           ),
                         ),
                         pw.Text(
                           'Hora: $horaActual',
-                          style: pw.TextStyle(
+                          style: const pw.TextStyle(
                             fontSize: 12,
                             color: colorTextoClaro,
                           ),
@@ -1326,7 +1334,7 @@ class PdfService {
                             pw.SizedBox(height: 10),
                             pw.Text(
                               'Todos los pagos están al día',
-                              style: pw.TextStyle(
+                              style: const pw.TextStyle(
                                 fontSize: 12,
                                 color: PdfColors.green800,
                               ),
@@ -1348,7 +1356,7 @@ class PdfService {
                       children: [
                         // Encabezado de la tabla
                         pw.TableRow(
-                          decoration: pw.BoxDecoration(
+                          decoration: const pw.BoxDecoration(
                             color: colorPrimario,
                           ),
                           children: [
@@ -1427,7 +1435,7 @@ class PdfService {
                         }).toList(),
                         // Fila de total
                         pw.TableRow(
-                          decoration: pw.BoxDecoration(
+                          decoration: const pw.BoxDecoration(
                             color: colorPrimarioSuave,
                           ),
                           children: [

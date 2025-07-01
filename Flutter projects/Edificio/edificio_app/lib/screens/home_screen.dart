@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/inquilino.dart';
 import '../screens/agregar_inquilino_screen.dart';
 import '../screens/tareas_screen.dart';
 import '../screens/expensas_editor_screen.dart';
 import '../services/storage_service.dart';
 import '../widgets/editar_expensas_dialog.dart';
-import '../widgets/editar_inquilino_dialog.dart';
 import '../services/pdf_service.dart';
 import '../services/deudas_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/log_service.dart';
 import '../widgets/month_year_picker.dart';
 import '../screens/cuentas_transferencia_screen.dart';
 import '../screens/documentos_inquilino_screen.dart';
+import 'dart:convert';
+import '../widgets/calculadora_aumento_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -65,14 +67,14 @@ class _HomeScreenState extends State<HomeScreen>
       
       // Si no hay inquilinos, intentar forzar la carga de predefinidos
       if (inquilinos.isEmpty) {
-        print("No se encontraron inquilinos, forzando recarga de predefinidos...");
+        log.w("No se encontraron inquilinos, forzando carga de predefinidos");
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('inquilinos_inicializados');
         await prefs.remove('inquilinos');
         
         // Recargar después de reiniciar
         inquilinos = await _storageService.loadInquilinos();
-        print("Reintento de carga completado, inquilinos: ${inquilinos.length}");
+        log.i("Reintento de carga completado: ${inquilinos.length} inquilinos cargados");
       }
 
       final mesAnio = DateFormat('MM-yyyy').format(_selectedDate);
@@ -81,14 +83,17 @@ class _HomeScreenState extends State<HomeScreen>
       // Verificar si hay pagos pendientes
       final detallesPendientes = _obtenerDetallesPagosPendientes(inquilinos);
       
-      // Calcular totales en una sola pasada
+      // Calcular totales usando los precios específicos por mes
       double totalAlquileres = 0.0;
       double totalExpensas = 0.0;
       
       for (var inquilino in inquilinos) {
+        // Obtener el precio específico para este mes
+        double precioAlquilerMes = inquilino.getPrecioAlquilerPorMes(mesAnio);
+        
         // Calcular totales
         if (inquilino.haPagadoAlquiler(mesAnio)) {
-          totalAlquileres += inquilino.precioAlquiler;
+          totalAlquileres += precioAlquilerMes;
         }
         
         if (inquilino.haPagadoExpensas(mesAnio)) {
@@ -110,8 +115,8 @@ class _HomeScreenState extends State<HomeScreen>
           _totalGeneral = totalAlquileres + totalExpensas;
         });
       }
-    } catch (e) {
-      print('Error al cargar datos: $e');
+    } catch (e, stackTrace) {
+      log.e("Error al cargar datos", e, stackTrace);
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -132,6 +137,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (result != null) {
       try {
+        log.i("Actualizando expensas para $mesAnio: $result");
         await _storageService.saveExpensas(mesAnio, result);
 
         // Actualizar las expensas de todos los inquilinos para este mes
@@ -145,11 +151,12 @@ class _HomeScreenState extends State<HomeScreen>
         // Recalcular totales con los nuevos valores de expensas
         _calcularTotalesRecibidos(_inquilinos, mesAnio);
 
-        setState(() {
-          _expensasComunes = result;
-        });
-
         if (mounted) {
+          setState(() {
+            _expensasComunes = result;
+          });
+          
+          log.i("Expensas actualizadas correctamente para $mesAnio");
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Expensas actualizadas correctamente'),
@@ -157,7 +164,8 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           );
         }
-      } catch (e) {
+      } catch (e, stackTrace) {
+        log.e("Error al guardar expensas", e, stackTrace);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error al guardar expensas: $e')),
@@ -177,6 +185,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (result != null) {
       try {
+        log.i("Actualizando inquilino: ${result.nombre} ${result.apellido}");
         final index = _inquilinos.indexWhere((i) => i.id == result.id);
         if (index != -1) {
           setState(() {
@@ -184,6 +193,7 @@ class _HomeScreenState extends State<HomeScreen>
           });
           await _storageService.saveInquilinos(_inquilinos);
           if (mounted) {
+            log.i("Inquilino actualizado correctamente");
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Inquilino actualizado correctamente'),
@@ -192,7 +202,8 @@ class _HomeScreenState extends State<HomeScreen>
             );
           }
         }
-      } catch (e) {
+      } catch (e, stackTrace) {
+        log.e("Error al actualizar inquilino", e, stackTrace);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error al actualizar inquilino: $e')),
@@ -230,16 +241,20 @@ class _HomeScreenState extends State<HomeScreen>
       });
       try {
         await _storageService.saveInquilinos(_inquilinos);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Inquilino eliminado correctamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Inquilino eliminado correctamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al eliminar inquilino: $e')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error al eliminar inquilino: $e')),
+          );
+        }
       }
     }
   }
@@ -266,7 +281,7 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() {}); // Refresh UI
       }
     } catch (e) {
-      print('Error al guardar estado de pago: $e');
+      // Error al guardar estado de pago
       // Revertir el cambio en caso de error
       inquilino.marcarPagado(mesAnio, !pagado);
       
@@ -300,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() {}); // Refresh UI
       }
     } catch (e) {
-      print('Error al guardar estado de pago de alquiler: $e');
+      // Error al guardar estado de pago de alquiler
       // Revertir el cambio en caso de error
       inquilino.marcarPagoAlquiler(mesAnio, !pagado);
       
@@ -334,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() {}); // Refresh UI
       }
     } catch (e) {
-      print('Error al guardar estado de pago de expensas: $e');
+      // Error al guardar estado de pago de expensas
       // Revertir el cambio en caso de error
       inquilino.marcarPagoExpensas(mesAnio, !pagado);
       
@@ -458,39 +473,11 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  void _mostrarInformacionInquilino(Inquilino inquilino) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Column(
-          children: [
-            Text(inquilino.nombre),
-            Text(inquilino.apellido),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Departamento: ${inquilino.departamento}'),
-            Text('Alquiler: \$${inquilino.precioAlquiler.toStringAsFixed(2)}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
-  }
-
   // Verificar pagos pendientes de meses a partir de 2025
   List<Map<String, dynamic>> _obtenerDetallesPagosPendientes(
       List<Inquilino> inquilinos) {
     // Usar 2025 como año base
-    final anioBase = 2025;
+    const anioBase = 2025;
     final DateTime now = DateTime.now();
     final int mesActual = now.month;
     final int anioActual = now.year;
@@ -521,7 +508,6 @@ class _HomeScreenState extends State<HomeScreen>
           }
 
           if (pendientes.isNotEmpty) {
-            final nombreMes = DateFormat('MMMM', 'es_ES').format(DateTime(anio, mes));
             mesesPendientes[mesAnio] = pendientes; // Usar mesAnio como clave para ordenar después
           }
         }
@@ -566,10 +552,6 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     return detallesPendientes;
-  }
-
-  void _mostrarMenuLateral() {
-    _scaffoldKey.currentState?.openDrawer();
   }
 
   void _navigateToTareasScreen() {
@@ -629,23 +611,25 @@ class _HomeScreenState extends State<HomeScreen>
     final detallesPendientes = _obtenerDetallesPagosPendientes(_inquilinos);
 
     if (detallesPendientes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No hay inquilinos con pagos pendientes'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No hay inquilinos con pagos pendientes'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
       return;
     }
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.warning, color: Colors.orange),
-            const SizedBox(width: 8),
-            const Text('Pagos Pendientes'),
+            Icon(Icons.warning, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Pagos Pendientes'),
           ],
         ),
         content: Container(
@@ -695,7 +679,6 @@ class _HomeScreenState extends State<HomeScreen>
                       Text('Depto: ${inquilino.departamento}'),
                       const Divider(),
                       ...mesesPendientes.entries.map((entry) {
-                        final mesAnio = entry.key;
                         final datos = entry.value;
                         final nombreMes = datos['nombre'] as String;
                         final pendientes = datos['pendientes'] as List<String>;
@@ -703,7 +686,7 @@ class _HomeScreenState extends State<HomeScreen>
                         
                         // Seleccionar color basado en el mes (índice 0-11)
                         final colorMes = coloresMeses[(mes - 1) % coloresMeses.length];
-                        final colorBorde = colorMes.withOpacity(0.8);
+                        final colorBorde = colorMes.withAlpha(204); // 0.8 * 255 = 204
                         
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -756,11 +739,32 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _mostrarCalculadoraAumento() {
-    // Primero cerrar el drawer
-    Navigator.pop(context);
-    // Luego mostrar la calculadora con un pequeño retraso
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) _mostrarCalculadoraAumento();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) => CalculadoraAumentoDialog(
+          inquilinos: _inquilinos,
+          selectedDate: _selectedDate,
+          onGuardarInquilino: (inquilinoActualizado) {
+            _guardarInquilino(inquilinoActualizado);
+          },
+        ),
+      ),
+    ).then((inquilinosActualizados) {
+      if (inquilinosActualizados != null && inquilinosActualizados is List<String> && inquilinosActualizados.isNotEmpty) {
+        // Recargar la lista de inquilinos
+        _cargarInquilinos();
+        
+        // Mostrar mensaje de éxito
+        ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
+          SnackBar(
+            content: Text('Aumentos aplicados a ${inquilinosActualizados.join(", ")}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     });
   }
 
@@ -852,45 +856,51 @@ class _HomeScreenState extends State<HomeScreen>
     final mesAnio = DateFormat('MM-yyyy').format(_selectedDate);
 
     try {
-      final filePath = await _pdfService.generarRecibo(inquilino, mesAnio);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Recibo generado exitosamente'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      await _pdfService.generarRecibo(inquilino, mesAnio);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Recibo generado exitosamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al generar recibo: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al generar recibo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   // Generar informe de deudas
   Future<void> _generarInformeDeudas(Inquilino inquilino) async {
     // Mostrar diálogo de carga
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Generando informe'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            const Text('Generando informe de deudas...'),
-          ],
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          title: Text('Generando informe'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Generando informe de deudas...'),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
     
     try {
       // Generar el informe
-      final filePath = await _deudasService.generarInformeDeudas(inquilino);
+      await _deudasService.generarInformeDeudas(inquilino);
       
       // Cerrar el diálogo de carga
       if (mounted) {
@@ -919,7 +929,7 @@ class _HomeScreenState extends State<HomeScreen>
           SnackBar(
             content: Text('Error al generar informe de deudas: $e'),
             backgroundColor: Colors.red,
-            duration: Duration(seconds: 5),
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -928,6 +938,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   // Agregar método para registrar método de pago
   Future<void> _registrarMetodoPago(Inquilino inquilino) async {
+    if (!mounted) return;
+    
     final mesAnio = DateFormat('MM-yyyy').format(_selectedDate);
     final metodoPagoActual = inquilino.getMetodoPago(mesAnio);
     final cuentaActual = inquilino.getCuentaTransferencia(mesAnio);
@@ -938,51 +950,57 @@ class _HomeScreenState extends State<HomeScreen>
     // Cargar cuentas disponibles
     final cuentasDisponibles = await _storageService.loadCuentasTransferencia();
 
+    if (!mounted) return;
+
     if (cuentasDisponibles.isEmpty &&
         metodoPagoSeleccionado == MetodoPago.transferencia) {
       // Si no hay cuentas disponibles y se intenta seleccionar transferencia
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'No hay cuentas de transferencia disponibles. Debe agregar cuentas primero.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'No hay cuentas de transferencia disponibles. Debe agregar cuentas primero.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
 
-        // Preguntar si desea ir a la pantalla de cuentas
-        final irACuentas = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Sin cuentas'),
-            content: const Text(
-                'No hay cuentas de transferencia disponibles. ¿Desea agregar una cuenta ahora?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('No'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Sí'),
-              ),
-            ],
-          ),
-        );
+      // Preguntar si desea ir a la pantalla de cuentas
+      final irACuentas = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Sin cuentas'),
+          content: const Text(
+              'No hay cuentas de transferencia disponibles. ¿Desea agregar una cuenta ahora?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Sí'),
+            ),
+          ],
+        ),
+      );
 
-        if (irACuentas == true) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (context) => const CuentasTransferenciaScreen()),
-          );
+      if (!mounted) return;
+
+      if (irACuentas == true) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => const CuentasTransferenciaScreen()),
+        );
+        if (mounted) {
           return _registrarMetodoPago(
               inquilino); // Volver a intentar luego de agregar cuentas
         }
-
-        return;
       }
+
+      return;
     }
+
+    if (!mounted) return;
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1038,7 +1056,7 @@ class _HomeScreenState extends State<HomeScreen>
                   const SizedBox(height: 16),
                   const Text('Seleccione la cuenta:'),
                   const SizedBox(height: 8),
-                  Container(
+                  SizedBox(
                     width: double.infinity,
                     child: DropdownButtonFormField<String>(
                       isExpanded: true,
@@ -1151,29 +1169,21 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // Método optimizado para calcular totales recibidos para un mes específico
-  void _calcularTotalesRecibidos(List<Inquilino> inquilinos, String mesAnio) {
-    if (inquilinos.isEmpty) {
-      setState(() {
-        _totalAlquileresRecibidos = 0;
-        _totalExpensasRecibidas = 0;
-        _totalGeneral = 0;
-      });
-      return;
-    }
-    
+  Future<void> _calcularTotalesRecibidos(List<Inquilino> inquilinos, String mesAnio) {
     double totalAlquileres = 0.0;
     double totalExpensas = 0.0;
     
     for (var inquilino in inquilinos) {
-      // Sumar alquileres pagados
+      // Usar el precio específico para el mes seleccionado
+      double precioAlquilerMes = inquilino.getPrecioAlquilerPorMes(mesAnio);
+      
       if (inquilino.haPagadoAlquiler(mesAnio)) {
-        totalAlquileres += inquilino.precioAlquiler;
+        totalAlquileres += precioAlquilerMes;
       }
       
-      // Sumar expensas pagadas
       if (inquilino.haPagadoExpensas(mesAnio)) {
         double expensasInquilino = inquilino.getExpensasPorMes(mesAnio);
-        totalExpensas += expensasInquilino > 0 ? expensasInquilino : _expensasComunes;
+        totalExpensas += (expensasInquilino > 0) ? expensasInquilino : _expensasComunes;
       }
     }
     
@@ -1182,6 +1192,8 @@ class _HomeScreenState extends State<HomeScreen>
       _totalExpensasRecibidas = totalExpensas;
       _totalGeneral = totalAlquileres + totalExpensas;
     });
+    
+    return Future.value();
   }
 
   @override
@@ -1249,7 +1261,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               onTap: () {
                 Navigator.pop(context); // cerrar drawer
-                Future.delayed(Duration(milliseconds: 300), () {
+                Future.delayed(const Duration(milliseconds: 300), () {
                   if (mounted) _mostrarPagosPendientes();
                 });
               },
@@ -1275,7 +1287,7 @@ class _HomeScreenState extends State<HomeScreen>
               title: const Text('Historial de Expensas'),
               onTap: () {
                 Navigator.pop(context); // cerrar drawer
-                Future.delayed(Duration(milliseconds: 300), () {
+                Future.delayed(const Duration(milliseconds: 300), () {
                   if (mounted) _mostrarHistorialExpensas();
                 });
               },
@@ -1290,7 +1302,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             ListTile(
               leading: const Icon(Icons.trending_up),
-              title: const Text('Calculadora de Aumento'),
+              title: const Text('Aumento'),
               onTap: () {
                 // Primero cerrar el drawer
                 Navigator.pop(context);
@@ -1307,10 +1319,10 @@ class _HomeScreenState extends State<HomeScreen>
               onTap: () {
                 Navigator.pop(context); // cerrar drawer
                 _mostrarAcercaDe();
-            },
-          ),
-        ],
-      ),
+              },
+            ),
+          ],
+        ),
       ),
       body: TabBarView(
         controller: _tabController,
@@ -1681,35 +1693,22 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildInquilinoCard(Inquilino inquilino) {
     final mesAnio = DateFormat('MM-yyyy').format(_selectedDate);
-    final bool pagado = inquilino.haPagado(mesAnio);
-    final bool pagadoAlquiler = inquilino.haPagadoAlquiler(mesAnio);
-    final bool pagadoExpensas = inquilino.haPagadoExpensas(mesAnio);
-    final double montoPendiente = inquilino.getMontoPendiente(mesAnio);
-
-    // Obtener información de método de pago
-    final metodoPago = inquilino.getMetodoPago(mesAnio);
-    final cuentaTransferencia = inquilino.getCuentaTransferencia(mesAnio);
-    final tieneDatosPago = pagado &&
-        (metodoPago == MetodoPago.transferencia ||
-            metodoPago == MetodoPago.efectivo);
-
-    // Calcular total (alquiler + expensas + pendiente)
-    final double expensasInquilino = inquilino.getExpensasPorMes(mesAnio);
-    final double total =
-        inquilino.precioAlquiler + expensasInquilino + montoPendiente;
-
+    final estaPagado = inquilino.haPagado(mesAnio);
+    final estaPagadoAlquiler = inquilino.haPagadoAlquiler(mesAnio);
+    final estaPagadoExpensas = inquilino.haPagadoExpensas(mesAnio);
+    final montoPendiente = inquilino.getMontoPendiente(mesAnio);
+    
+    // Obtener el precio del alquiler específico para este mes
+    final precioAlquilerMes = inquilino.getPrecioAlquilerPorMes(mesAnio);
+    
+    // Obtener las expensas específicas para este mes
+    final expensasMes = inquilino.getExpensasPorMes(mesAnio);
+    final expensasAMostrar = expensasMes > 0 ? expensasMes : _expensasComunes;
+    
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: pagado ? Colors.green.shade300 : Colors.grey.shade300,
-          width: 1.5,
-        ),
-      ),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1726,12 +1725,14 @@ class _HomeScreenState extends State<HomeScreen>
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 4),
                       Text(
-                        'Departamento: ${inquilino.departamento}',
-                        style: TextStyle(
+                        'Depto: ${inquilino.departamento}',
+                        style: const TextStyle(
                           fontSize: 14,
-                          color: Colors.grey.shade700,
+                          color: Colors.grey,
                         ),
                       ),
                     ],
@@ -1740,28 +1741,12 @@ class _HomeScreenState extends State<HomeScreen>
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.folder),
-                      tooltip: 'Ver documentos',
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => DocumentosInquilinoScreen(
-                              inquilino: inquilino,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    IconButton(
                       icon: const Icon(Icons.edit),
-                      tooltip: 'Editar inquilino',
                       onPressed: () => _mostrarEditarInquilinoDialog(inquilino),
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete),
-                      tooltip: 'Eliminar inquilino',
-                      onPressed: () => _eliminarInquilino(inquilino),
+                      onPressed: () => _confirmarEliminarInquilino(inquilino),
                     ),
                   ],
                 ),
@@ -1771,105 +1756,82 @@ class _HomeScreenState extends State<HomeScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                const Text('Alquiler:'),
                 Text(
-                    'Alquiler: \$${inquilino.precioAlquiler.toStringAsFixed(2)}'),
-                Text('Expensas: \$${expensasInquilino.toStringAsFixed(2)}'),
+                  '\$${NumberFormat('#,###.##', 'es_AR').format(precioAlquilerMes)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ],
             ),
-            if (tieneDatosPago) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Expensas:'),
+                Text(
+                  '\$${NumberFormat('#,###.##', 'es_AR').format(expensasAMostrar)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            if (montoPendiente > 0) ...[
               const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                decoration: BoxDecoration(
-                  color: metodoPago == MetodoPago.efectivo
-                      ? Colors.green.shade100
-                      : Colors.blue.shade100,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      metodoPago == MetodoPago.efectivo
-                          ? Icons.money
-                          : Icons.account_balance,
-                      size: 16,
-                      color: metodoPago == MetodoPago.efectivo
-                          ? Colors.green.shade800
-                          : Colors.blue.shade800,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Monto pendiente:',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  Text(
+                    '\$${NumberFormat('#,###.##', 'es_AR').format(montoPendiente)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      metodoPago == MetodoPago.efectivo
-                          ? 'Efectivo'
-                          : 'Transferencia: $cuentaTransferencia',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: metodoPago == MetodoPago.efectivo
-                            ? Colors.green.shade800
-                            : Colors.blue.shade800,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
+            const SizedBox(height: 16),
+            Row(
               children: [
-                FilterChip(
-                  label: const Text('Pagado'),
-                  selected: pagado,
-                  checkmarkColor: Colors.white,
-                  selectedColor: Colors.green,
-                  onSelected: (_) => _togglePago(inquilino),
-                ),
-                FilterChip(
-                  label: const Text('Alquiler'),
-                  selected: pagadoAlquiler,
-                  checkmarkColor: Colors.white,
-                  selectedColor: Colors.blue,
-                  onSelected: (_) => _togglePagoAlquiler(inquilino),
-                ),
-                FilterChip(
-                  label: const Text('Expensas'),
-                  selected: pagadoExpensas,
-                  checkmarkColor: Colors.white,
-                  selectedColor: Colors.purple,
-                  onSelected: (_) => _togglePagoExpensas(inquilino),
-                ),
-                ActionChip(
-                  label: Text(montoPendiente > 0
-                      ? 'Editar pendiente'
-                      : 'Agregar pendiente'),
-                  avatar: Icon(montoPendiente > 0 ? Icons.edit : Icons.add),
-                  onPressed: () => _agregarMontoPendiente(inquilino),
-                ),
-                if (pagadoAlquiler || pagadoExpensas)
-                  ActionChip(
-                    label: const Text('Método de pago'),
-                    avatar: const Icon(Icons.payment),
-                    backgroundColor: Colors.orange.shade100,
-                    onPressed: () => _registrarMetodoPago(inquilino),
+                Expanded(
+                  child: _buildPagoButton(
+                    label: 'Alquiler',
+                    isPaid: estaPagadoAlquiler,
+                    onPressed: () => _togglePagoAlquiler(inquilino),
                   ),
-                if (pagado)
-                  ActionChip(
-                    label: const Text('PDF'),
-                    avatar: const Icon(Icons.picture_as_pdf),
-                    backgroundColor: Colors.red.shade100,
-                    onPressed: () => _generarReciboPDF(inquilino),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildPagoButton(
+                    label: 'Expensas',
+                    isPaid: estaPagadoExpensas,
+                    onPressed: () => _togglePagoExpensas(inquilino),
                   ),
-                // Botón para generar informe de deudas - siempre visible y destacado
-                ActionChip(
-                  label: const Text('Deudas', style: TextStyle(fontWeight: FontWeight.bold)),
-                  avatar: const Icon(Icons.warning, color: Colors.red),
-                  backgroundColor: Colors.red.shade200,
-                  elevation: 4,
-                  shadowColor: Colors.red.shade300,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  onPressed: () => _generarInformeDeudas(inquilino),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildPagoButton(
+              label: 'Marcar Todo como Pagado',
+              isPaid: estaPagado,
+              onPressed: () => _togglePago(inquilino),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _mostrarOpcionesPago(inquilino),
+                    icon: const Icon(Icons.payment),
+                    label: const Text('Opciones de Pago'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1877,5 +1839,183 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       ),
     );
+  }
+  
+  // Método para guardar un inquilino en el almacenamiento
+  Future<void> _guardarInquilino(Inquilino inquilino) async {
+    try {
+      // Guardar los datos del inquilino
+      final prefs = await SharedPreferences.getInstance();
+      final List<String> inquilinosIds = prefs.getStringList('inquilinos_ids') ?? [];
+      
+      // Si el ID no está en la lista, añadirlo
+      if (!inquilinosIds.contains(inquilino.id)) {
+        inquilinosIds.add(inquilino.id);
+        await prefs.setStringList('inquilinos_ids', inquilinosIds);
+      }
+      
+      // Guardar los datos del inquilino
+      final String inquilinoJson = jsonEncode(inquilino.toMap());
+      await prefs.setString('inquilino_${inquilino.id}', inquilinoJson);
+      
+      // Verificar si el widget sigue montado antes de actualizar el estado
+      if (!mounted) return;
+      
+      // Actualizar la lista de inquilinos en memoria
+      setState(() {
+        // Buscar si el inquilino ya existe en la lista
+        final index = _inquilinos.indexWhere((i) => i.id == inquilino.id);
+        if (index >= 0) {
+          // Actualizar el inquilino existente
+          _inquilinos[index] = inquilino;
+        } else {
+          // Añadir el nuevo inquilino
+          _inquilinos.add(inquilino);
+        }
+      });
+      
+      // Actualizar los totales
+      final mesAnio = DateFormat('MM-yyyy').format(_selectedDate);
+      _calcularTotalesRecibidos(_inquilinos, mesAnio);
+      
+      log.i('Inquilino guardado: ${inquilino.nombre} ${inquilino.apellido}');
+    } catch (e) {
+      log.e('Error al guardar inquilino: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar inquilino: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Método para construir botones de pago con estado
+  Widget _buildPagoButton({
+    required String label,
+    required bool isPaid,
+    required VoidCallback onPressed,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(
+        isPaid ? Icons.check_circle : Icons.unpublished,
+        color: isPaid ? Colors.white : Colors.white70,
+      ),
+      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isPaid ? Colors.green : Colors.grey,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(double.infinity, 40),
+      ),
+    );
+  }
+
+  // Método para mostrar opciones de pago
+  void _mostrarOpcionesPago(Inquilino inquilino) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Opciones de pago',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.payment),
+                  title: const Text('Registrar método de pago'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _registrarMetodoPago(inquilino);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.pending_actions),
+                  title: const Text('Registrar monto pendiente'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _agregarMontoPendiente(inquilino);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.receipt),
+                  title: const Text('Generar recibo'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _generarReciboPDF(inquilino);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.report),
+                  title: const Text('Informe de deudas'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _generarInformeDeudas(inquilino);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.folder),
+                  title: const Text('Documentos'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DocumentosInquilinoScreen(
+                          inquilino: inquilino,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Método para confirmar eliminación de inquilino
+  Future<void> _confirmarEliminarInquilino(Inquilino inquilino) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar eliminación'),
+        content: Text(
+          '¿Está seguro que desea eliminar a ${inquilino.nombre}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      _eliminarInquilino(inquilino);
+    }
   }
 } 

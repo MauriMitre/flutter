@@ -1,57 +1,45 @@
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
-import 'package:flutter/foundation.dart';
-import 'package:uuid/uuid.dart';
+import 'log_service.dart';
 
 class FileService {
-  // Obtener directorio para almacenar documentos
-  Future<Directory> get _documentosDir async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final documentosDir = Directory('${appDir.path}/documentos');
-    
-    // Crear directorio si no existe
-    if (!await documentosDir.exists()) {
-      await documentosDir.create(recursive: true);
-    }
-    
-    return documentosDir;
-  }
+  // Esta función se eliminó porque no estaba siendo utilizada
   
   // Guardar un archivo y obtener su ruta relativa
-  Future<String> guardarArchivo(File archivo, String inquilinoId, String nombre) async {
+  Future<String> guardarArchivo(File archivo, String inquilinoId, String nombreOriginal) async {
     try {
-      final dir = await _documentosDir;
+      // Obtener directorio de documentos
+      final appDir = await getApplicationDocumentsDirectory();
       
-      // Crear directorio específico para el inquilino
-      final inquilinoDir = Directory('${dir.path}/$inquilinoId');
+      // Crear carpeta para el inquilino si no existe
+      final inquilinoDir = Directory('${appDir.path}/inquilinos/$inquilinoId');
       if (!await inquilinoDir.exists()) {
         await inquilinoDir.create(recursive: true);
       }
       
       // Generar nombre único para el archivo
-      final extension = path.extension(archivo.path);
-      final nombreArchivo = '${const Uuid().v4()}$extension';
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final extension = nombreOriginal.split('.').last;
+      final nombreArchivo = '$timestamp.$extension';
       
       // Ruta completa del archivo
       final rutaDestino = '${inquilinoDir.path}/$nombreArchivo';
       
-      // Copiar archivo a destino
+      // Copiar archivo a la ubicación final
       await archivo.copy(rutaDestino);
       
-      // Devolver ruta relativa para almacenar en la base de datos
-      return '$inquilinoId/$nombreArchivo';
-    } catch (e) {
-      debugPrint('Error al guardar archivo: $e');
+      // Devolver ruta relativa para guardar en la base de datos
+      return 'inquilinos/$inquilinoId/$nombreArchivo';
+    } catch (e, stackTrace) {
+      log.e('Error al guardar archivo', e, stackTrace);
       rethrow;
     }
   }
   
   // Obtener archivo a partir de ruta relativa
   Future<File> getArchivo(String rutaRelativa) async {
-    final dir = await _documentosDir;
-    final rutaCompleta = '${dir.path}/$rutaRelativa';
-    return File(rutaCompleta);
+    final appDir = await getApplicationDocumentsDirectory();
+    return File('${appDir.path}/$rutaRelativa');
   }
   
   // Eliminar archivo
@@ -60,9 +48,13 @@ class FileService {
       final archivo = await getArchivo(rutaRelativa);
       if (await archivo.exists()) {
         await archivo.delete();
+        log.i('Archivo eliminado: $rutaRelativa');
+      } else {
+        log.w('Archivo no encontrado para eliminar: $rutaRelativa');
       }
-    } catch (e) {
-      debugPrint('Error al eliminar archivo: $e');
+    } catch (e, stackTrace) {
+      log.e('Error al eliminar archivo', e, stackTrace);
+      rethrow;
     }
   }
   

@@ -2,33 +2,46 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'screens/home_screen.dart';
 import 'package:edificio_app/services/storage_service.dart';
-import 'package:edificio_app/models/inquilino.dart';
-import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:image_picker/image_picker.dart';
+import 'services/log_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es_ES', null);
   
   try {
-    // Forzar inicialización de inquilinos predefinidos
+    // Inicializar el servicio de almacenamiento
     final storageService = StorageService();
     final prefs = await SharedPreferences.getInstance();
     
-    // Eliminar la marca de inicialización para forzar la carga de inquilinos predefinidos
-    await prefs.remove('inquilinos_inicializados');
-    // Eliminar lista actual de inquilinos si existe
-    await prefs.remove('inquilinos');
+    // Verificar si es la primera ejecución
+    bool primeraEjecucion = !(prefs.getBool('app_inicializada') ?? false);
     
-    // Cargar inquilinos (esto ejecutará la inicialización)
+    if (primeraEjecucion) {
+      // Solo en la primera ejecución, inicializar datos
+      log.i("Primera ejecución de la aplicación, inicializando datos...");
+      
+      // Eliminar la marca de inicialización para forzar la carga de inquilinos predefinidos
+      await prefs.remove('inquilinos_inicializados');
+      // Eliminar lista actual de inquilinos si existe
+      await prefs.remove('inquilinos');
+      
+      // Marcar que la app ya se ha inicializado
+      await prefs.setBool('app_inicializada', true);
+      
+      log.i("Configuración inicial completada");
+    } else {
+      log.i("Iniciando aplicación con datos existentes");
+    }
+    
+    // Cargar inquilinos (esto ejecutará la inicialización si es necesario)
     final inquilinos = await storageService.loadInquilinos();
-    print("Inicialización completa: ${inquilinos.length} inquilinos cargados");
+    log.i("Inicialización completa: ${inquilinos.length} inquilinos cargados");
     
     // Verificar que todos los inquilinos se hayan cargado correctamente
-    if (inquilinos.isEmpty) {
-      print("ADVERTENCIA: No se cargaron inquilinos predefinidos");
+    if (inquilinos.isEmpty && primeraEjecucion) {
+      log.w("ADVERTENCIA: No se cargaron inquilinos predefinidos");
     } else {
       for (int i = 0; i < inquilinos.length; i++) {
         final inquilino = inquilinos[i];
@@ -36,12 +49,12 @@ void main() async {
             inquilino.nombre.isEmpty ||
             inquilino.apellido.isEmpty ||
             inquilino.departamento.isEmpty) {
-          print("ERROR: Inquilino ${i+1} tiene campos vacíos");
+          log.e("ERROR: Inquilino ${i+1} tiene campos vacíos", null, StackTrace.current);
         }
       }
     }
-  } catch (e) {
-    print("ERROR durante la inicialización: $e");
+  } catch (e, stackTrace) {
+    log.e("ERROR durante la inicialización", e, stackTrace);
   }
   
   runApp(const MyApp());

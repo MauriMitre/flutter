@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../services/log_service.dart';
 
 // Enum para el método de pago
 enum MetodoPago {
@@ -23,41 +24,116 @@ extension MetodoPagoExtension on MetodoPago {
 
 class Inquilino {
   final String id;
-  String nombre;
-  String departamento;
-  String apellido;
-  double precioAlquiler;
-  Map<String, double> expensas; // Mapa con formato "MM-yyyy" -> monto
-  Map<String, bool> pagos; // Formato "MM-yyyy" -> pagado
-  Map<String, bool> pagosAlquiler; // Pagos de alquiler por mes
-  Map<String, bool> pagosExpensas; // Pagos de expensas por mes
-  Map<String, double> montosPendientes; // Montos pendientes por mes
-  
-  // Nuevos campos para método de pago
-  Map<String, String> metodosPago; // Formato "MM-yyyy" -> "efectivo" o "transferencia"
-  Map<String, String> cuentasTransferencia; // Formato "MM-yyyy" -> "cuenta destino"
+  final String nombre;
+  final String apellido;
+  final String departamento;
+  final double _precioAlquilerBase;  // Precio base/predeterminado
+  final Map<String, bool> pagos;
+  final Map<String, double> expensas;
+  final Map<String, bool> pagosAlquiler;
+  final Map<String, bool> pagosExpensas;
+  final Map<String, double> montosPendientes;
+  final Map<String, MetodoPago> metodosPago;
+  final Map<String, String> cuentasTransferencia;
+  final Map<String, double> preciosAlquilerPorMes;  // Mapa para precios históricos
+
+  // Getter para obtener el precio actual del alquiler
+  double get precioAlquiler => _precioAlquilerBase;
 
   Inquilino({
     required this.id,
     required this.nombre,
-    required this.departamento,
-    required this.precioAlquiler,
     required this.apellido,
-    Map<String, double>? expensas,
+    required this.departamento,
+    required double precioAlquiler,
+    this.pagos = const {},
+    this.expensas = const {},
+    this.pagosAlquiler = const {},
+    this.pagosExpensas = const {},
+    this.montosPendientes = const {},
+    this.metodosPago = const {},
+    this.cuentasTransferencia = const {},
+    this.preciosAlquilerPorMes = const {},
+  }) : _precioAlquilerBase = precioAlquiler;
+
+  // Crear una copia del inquilino con valores actualizados
+  Inquilino copyWith({
+    String? id,
+    String? nombre,
+    String? apellido,
+    String? departamento,
+    double? precioAlquiler,
     Map<String, bool>? pagos,
+    Map<String, double>? expensas,
     Map<String, bool>? pagosAlquiler,
     Map<String, bool>? pagosExpensas,
     Map<String, double>? montosPendientes,
-    Map<String, String>? metodosPago,
+    Map<String, MetodoPago>? metodosPago,
     Map<String, String>? cuentasTransferencia,
-  }) : 
-    expensas = expensas ?? {},
-    pagos = pagos ?? {},
-    pagosAlquiler = pagosAlquiler ?? {},
-    pagosExpensas = pagosExpensas ?? {},
-    montosPendientes = montosPendientes ?? {},
-    metodosPago = metodosPago ?? {},
-    cuentasTransferencia = cuentasTransferencia ?? {};
+    Map<String, double>? preciosAlquilerPorMes,
+  }) {
+    return Inquilino(
+      id: id ?? this.id,
+      nombre: nombre ?? this.nombre,
+      apellido: apellido ?? this.apellido,
+      departamento: departamento ?? this.departamento,
+      precioAlquiler: precioAlquiler ?? _precioAlquilerBase,
+      pagos: pagos ?? Map.from(this.pagos),
+      expensas: expensas ?? Map.from(this.expensas),
+      pagosAlquiler: pagosAlquiler ?? Map.from(this.pagosAlquiler),
+      pagosExpensas: pagosExpensas ?? Map.from(this.pagosExpensas),
+      montosPendientes: montosPendientes ?? Map.from(this.montosPendientes),
+      metodosPago: metodosPago ?? Map.from(this.metodosPago),
+      cuentasTransferencia: cuentasTransferencia ?? Map.from(this.cuentasTransferencia),
+      preciosAlquilerPorMes: preciosAlquilerPorMes ?? Map.from(this.preciosAlquilerPorMes),
+    );
+  }
+
+  // Obtener el precio de alquiler para un mes específico
+  double getPrecioAlquilerPorMes(String mesAnio) {
+    // Si hay un precio específico para este mes, devolver ese
+    return preciosAlquilerPorMes[mesAnio] ?? _precioAlquilerBase;
+  }
+
+  // Aplicar un aumento de alquiler preservando el historial
+  static Inquilino aplicarAumento(Inquilino inquilino, String mesActual, double nuevoPrecio) {
+    log.i('Aplicando aumento: ${inquilino._precioAlquilerBase} -> $nuevoPrecio a partir de $mesActual');
+    
+    // Crear un nuevo mapa para los precios históricos
+    final nuevosPreciosHistoricos = Map<String, double>.from(inquilino.preciosAlquilerPorMes);
+    
+    // Guardar el precio actual como histórico para TODOS los meses anteriores a mesActual
+    // que no tengan un precio específico ya establecido
+    final partes = mesActual.split('-');
+    if (partes.length == 2) {
+      final mesActualNum = int.tryParse(partes[0]) ?? 0;
+      final anioActualNum = int.tryParse(partes[1]) ?? 0;
+      
+      if (mesActualNum > 0 && anioActualNum > 0) {
+        // Para todos los meses anteriores al mes actual, guardar el precio actual
+        for (int anio = 2020; anio <= anioActualNum; anio++) {
+          for (int mes = 1; mes <= 12; mes++) {
+            // Si es un mes anterior al mes actual del año actual, o un año anterior
+            if ((anio < anioActualNum) || (anio == anioActualNum && mes < mesActualNum)) {
+              final mesAnioStr = '${mes.toString().padLeft(2, '0')}-$anio';
+              
+              // Solo guardar si no hay un precio específico ya establecido
+              if (!nuevosPreciosHistoricos.containsKey(mesAnioStr)) {
+                nuevosPreciosHistoricos[mesAnioStr] = inquilino._precioAlquilerBase;
+                log.d('Guardando precio histórico para $mesAnioStr: ${inquilino._precioAlquilerBase}');
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Crear una nueva instancia con el nuevo precio base y el historial actualizado
+    return inquilino.copyWith(
+      precioAlquiler: nuevoPrecio,
+      preciosAlquilerPorMes: nuevosPreciosHistoricos,
+    );
+  }
 
   // Verifica si ha pagado tanto alquiler como expensas
   bool haPagado(String mesAnio) {
@@ -66,34 +142,31 @@ class Inquilino {
 
   // Verifica si ha pagado el alquiler
   bool haPagadoAlquiler(String mesAnio) {
-    // Imprimir información de depuración
-    print('Verificando pago de alquiler para $mesAnio: ${pagosAlquiler[mesAnio] ?? false}');
+    log.d('Verificando pago de alquiler para $mesAnio: ${pagosAlquiler[mesAnio] ?? false}');
     return pagosAlquiler[mesAnio] ?? false;
   }
 
   // Verifica si ha pagado las expensas
   bool haPagadoExpensas(String mesAnio) {
-    // Imprimir información de depuración
-    print('Verificando pago de expensas para $mesAnio: ${pagosExpensas[mesAnio] ?? false}');
+    log.d('Verificando pago de expensas para $mesAnio: ${pagosExpensas[mesAnio] ?? false}');
     return pagosExpensas[mesAnio] ?? false;
   }
 
   // Obtener el monto pendiente para un mes específico
   double getMontoPendiente(String mesAnio) {
-    // Imprimir información de depuración
-    print('Obteniendo monto pendiente para $mesAnio: ${montosPendientes[mesAnio] ?? 0.0}');
+    log.d('Obteniendo monto pendiente para $mesAnio: ${montosPendientes[mesAnio] ?? 0.0}');
     return montosPendientes[mesAnio] ?? 0.0;
   }
   
   // Obtener el método de pago para un mes específico
   MetodoPago getMetodoPago(String mesAnio) {
-    final metodoPagoStr = metodosPago[mesAnio];
-    return MetodoPagoExtension.fromValue(metodoPagoStr);
+    return metodosPago[mesAnio] ?? MetodoPago.efectivo;
   }
   
   // Establecer el método de pago para un mes específico
   void setMetodoPago(String mesAnio, MetodoPago metodoPago) {
-    metodosPago[mesAnio] = metodoPago.toValue();
+    metodosPago[mesAnio] = metodoPago;
+    log.d('Establecido método de pago para $mesAnio: ${metodoPago.toString()}');
   }
   
   // Obtener la cuenta de transferencia para un mes específico
@@ -104,6 +177,7 @@ class Inquilino {
   // Establecer la cuenta de transferencia para un mes específico
   void setCuentaTransferencia(String mesAnio, String cuenta) {
     cuentasTransferencia[mesAnio] = cuenta;
+    log.d('Establecida cuenta de transferencia para $mesAnio: $cuenta');
   }
 
   // Marcar como pagado (tanto alquiler como expensas)
@@ -151,7 +225,7 @@ class Inquilino {
   double getExpensasPorMes(String mesAnio) {
     // Si el inquilino tiene expensas personalizadas para este mes, devolver esas
     final expensasMes = expensas[mesAnio] ?? 0.0;
-    print('Obteniendo expensas para $mesAnio: $expensasMes');
+    log.d('Obteniendo expensas para $mesAnio: $expensasMes');
     return expensasMes;
   }
 
@@ -162,104 +236,95 @@ class Inquilino {
     } else {
       expensas[mesAnio] = monto;
     }
+    log.d('Establecidas expensas para $mesAnio: $monto');
   }
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'nombre': nombre,
-      'departamento': departamento,
       'apellido': apellido,
-      'precioAlquiler': precioAlquiler,
-      'expensas': expensas,
-      'pagos': pagos,
-      'pagosAlquiler': pagosAlquiler,
-      'pagosExpensas': pagosExpensas,
-      'montosPendientes': montosPendientes,
-      'metodosPago': metodosPago,
-      'cuentasTransferencia': cuentasTransferencia,
+      'departamento': departamento,
+      'precioAlquiler': _precioAlquilerBase,
+      'pagos': jsonEncode(pagos),
+      'expensas': jsonEncode(expensas),
+      'pagosAlquiler': jsonEncode(pagosAlquiler),
+      'pagosExpensas': jsonEncode(pagosExpensas),
+      'montosPendientes': jsonEncode(montosPendientes),
+      'metodosPago': jsonEncode(metodosPago.map((k, v) => MapEntry(k, v.index))),
+      'cuentasTransferencia': jsonEncode(cuentasTransferencia),
+      'preciosAlquilerPorMes': jsonEncode(preciosAlquilerPorMes),
     };
   }
 
   factory Inquilino.fromMap(Map<String, dynamic> map) {
-    // Convertir los mapas del JSON
-    Map<String, double> expensasMap = {};
-    Map<String, bool> pagosMap = {};
-    Map<String, bool> pagosAlquilerMap = {};
-    Map<String, bool> pagosExpensasMap = {};
-    Map<String, double> montosPendientesMap = {};
-    Map<String, String> metodosPagoMap = {};
-    Map<String, String> cuentasTransferenciaMap = {};
-
-    if (map['expensas'] != null) {
-      final expensasData = map['expensas'] as Map<String, dynamic>;
-      expensasMap = expensasData.map((key, value) => 
-        MapEntry(key, (value is int) ? value.toDouble() : (value as num).toDouble()));
-    }
-
-    if (map['pagos'] != null) {
-      final pagosData = map['pagos'] as Map<String, dynamic>;
-      pagosMap = pagosData.map((key, value) => MapEntry(key, value as bool));
-    }
-
-    if (map['pagosAlquiler'] != null) {
-      final pagosAlquilerData = map['pagosAlquiler'] as Map<String, dynamic>;
-      pagosAlquilerMap = pagosAlquilerData.map((key, value) => MapEntry(key, value as bool));
-    }
-
-    if (map['pagosExpensas'] != null) {
-      final pagosExpensasData = map['pagosExpensas'] as Map<String, dynamic>;
-      pagosExpensasMap = pagosExpensasData.map((key, value) => MapEntry(key, value as bool));
-    }
-
-    if (map['montosPendientes'] != null) {
-      final montosPendientesData = map['montosPendientes'] as Map<String, dynamic>;
-      montosPendientesMap = montosPendientesData.map((key, value) => 
-        MapEntry(key, (value is int) ? value.toDouble() : (value as num).toDouble()));
-    }
-    
-    if (map['metodosPago'] != null) {
-      final metodosPagoData = map['metodosPago'] as Map<String, dynamic>;
-      metodosPagoMap = metodosPagoData.map((key, value) => MapEntry(key, value as String));
-    }
-    
-    if (map['cuentasTransferencia'] != null) {
-      final cuentasTransferenciaData = map['cuentasTransferencia'] as Map<String, dynamic>;
-      cuentasTransferenciaMap = cuentasTransferenciaData.map((key, value) => MapEntry(key, value as String));
-    }
-
-    // Asegurarse de que ningún campo requerido sea nulo
-    final id = map['id'] as String? ?? '';
-    final nombre = map['nombre'] as String? ?? '';
-    final departamento = map['departamento'] as String? ?? '';
-    final apellido = map['apellido'] as String? ?? '';
-    
-    // Manejar el precioAlquiler adecuadamente
-    double precioAlquiler = 0.0;
-    if (map['precioAlquiler'] != null) {
-      if (map['precioAlquiler'] is int) {
-        precioAlquiler = (map['precioAlquiler'] as int).toDouble();
-      } else if (map['precioAlquiler'] is double) {
-        precioAlquiler = map['precioAlquiler'] as double;
-      } else if (map['precioAlquiler'] is num) {
-        precioAlquiler = (map['precioAlquiler'] as num).toDouble();
+    try {
+      // Función auxiliar para convertir JSON a Map<String, bool>
+      Map<String, bool> parseBoolMap(String jsonStr) {
+        final Map<String, dynamic> jsonMap = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return jsonMap.map((key, value) => MapEntry(key, value as bool));
       }
-    }
 
-    return Inquilino(
-      id: id,
-      nombre: nombre,
-      departamento: departamento,
-      apellido: apellido,
-      precioAlquiler: precioAlquiler,
-      expensas: expensasMap,
-      pagos: pagosMap,
-      pagosAlquiler: pagosAlquilerMap,
-      pagosExpensas: pagosExpensasMap,
-      montosPendientes: montosPendientesMap,
-      metodosPago: metodosPagoMap,
-      cuentasTransferencia: cuentasTransferenciaMap,
-    );
+      // Función auxiliar para convertir JSON a Map<String, double>
+      Map<String, double> parseDoubleMap(String jsonStr) {
+        final Map<String, dynamic> jsonMap = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return jsonMap.map((key, value) {
+          if (value is int) {
+            return MapEntry(key, value.toDouble());
+          }
+          return MapEntry(key, value as double);
+        });
+      }
+
+      // Función auxiliar para convertir JSON a Map<String, MetodoPago>
+      Map<String, MetodoPago> parseMetodoPagoMap(String jsonStr) {
+        final Map<String, dynamic> jsonMap = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return jsonMap.map((key, value) => MapEntry(key, MetodoPago.values[value as int]));
+      }
+
+      // Función auxiliar para convertir JSON a Map<String, String>
+      Map<String, String> parseStringMap(String jsonStr) {
+        final Map<String, dynamic> jsonMap = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return jsonMap.map((key, value) => MapEntry(key, value as String));
+      }
+
+      return Inquilino(
+        id: map['id'] as String,
+        nombre: map['nombre'] as String,
+        apellido: map['apellido'] as String,
+        departamento: map['departamento'] as String,
+        precioAlquiler: (map['precioAlquiler'] is int)
+            ? (map['precioAlquiler'] as int).toDouble()
+            : map['precioAlquiler'] as double,
+        pagos: map.containsKey('pagos') && map['pagos'] != null
+            ? parseBoolMap(map['pagos'] as String)
+            : {},
+        expensas: map.containsKey('expensas') && map['expensas'] != null
+            ? parseDoubleMap(map['expensas'] as String)
+            : {},
+        pagosAlquiler: map.containsKey('pagosAlquiler') && map['pagosAlquiler'] != null
+            ? parseBoolMap(map['pagosAlquiler'] as String)
+            : {},
+        pagosExpensas: map.containsKey('pagosExpensas') && map['pagosExpensas'] != null
+            ? parseBoolMap(map['pagosExpensas'] as String)
+            : {},
+        montosPendientes: map.containsKey('montosPendientes') && map['montosPendientes'] != null
+            ? parseDoubleMap(map['montosPendientes'] as String)
+            : {},
+        metodosPago: map.containsKey('metodosPago') && map['metodosPago'] != null
+            ? parseMetodoPagoMap(map['metodosPago'] as String)
+            : {},
+        cuentasTransferencia: map.containsKey('cuentasTransferencia') && map['cuentasTransferencia'] != null
+            ? parseStringMap(map['cuentasTransferencia'] as String)
+            : {},
+        preciosAlquilerPorMes: map.containsKey('preciosAlquilerPorMes') && map['preciosAlquilerPorMes'] != null
+            ? parseDoubleMap(map['preciosAlquilerPorMes'] as String)
+            : {},
+      );
+    } catch (e, stackTrace) {
+      log.e("Error al crear Inquilino desde Map", e, stackTrace);
+      rethrow;
+    }
   }
 
   String toJson() => json.encode(toMap());

@@ -7,10 +7,10 @@ class CuentasTransferenciaScreen extends StatefulWidget {
   const CuentasTransferenciaScreen({Key? key}) : super(key: key);
 
   @override
-  _CuentasTransferenciaScreenState createState() => _CuentasTransferenciaScreenState();
+  CuentasTransferenciaScreenState createState() => CuentasTransferenciaScreenState();
 }
 
-class _CuentasTransferenciaScreenState extends State<CuentasTransferenciaScreen> {
+class CuentasTransferenciaScreenState extends State<CuentasTransferenciaScreen> {
   final StorageService _storageService = StorageService();
   final TextEditingController _nombreController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -42,7 +42,7 @@ class _CuentasTransferenciaScreenState extends State<CuentasTransferenciaScreen>
         _isLoading = false;
       });
     } catch (e) {
-      print('Error al cargar cuentas: $e');
+      // Error al cargar cuentas: $e
       setState(() {
         _isLoading = false;
       });

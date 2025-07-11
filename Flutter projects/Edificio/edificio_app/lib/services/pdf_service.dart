@@ -30,7 +30,7 @@ class PdfService {
     // Obtener datos del inquilino
     final nombre = '${inquilino.nombre} ${inquilino.apellido}';
     final departamento = inquilino.departamento;
-    final alquiler = inquilino.precioAlquiler;
+    final alquiler = inquilino.getPrecioAlquilerPorMes(mesAnio); // Usar el precio específico para este mes
     final expensas = inquilino.getExpensasPorMes(mesAnio);
     final total = alquiler + expensas;
     

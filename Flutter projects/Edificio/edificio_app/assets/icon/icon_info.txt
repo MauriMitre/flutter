@@ -1,0 +1,22 @@
+Para crear los íconos de la aplicación:
+
+1. Crea un archivo PNG llamado "app_icon.png" de 1024x1024 píxeles con un ícono de edificio o propiedad.
+   - Debe ser un ícono cuadrado
+   - Recomendado: fondo azul (#2196F3) con un ícono blanco de edificio
+
+2. Crea un archivo PNG llamado "app_icon_foreground.png" de 1024x1024 píxeles.
+   - Este debe ser solo el ícono (sin fondo) para el ícono adaptativo de Android
+   - Recomendado: solo el ícono blanco de edificio sin fondo
+
+3. Coloca ambos archivos en esta carpeta (assets/icon/)
+
+4. Ejecuta: flutter pub run flutter_launcher_icons
+
+Puedes usar herramientas como:
+- Adobe Illustrator
+- Figma
+- Canva
+- Iconscout
+- Flaticon
+
+O cualquier herramienta de diseño para crear estos íconos. 

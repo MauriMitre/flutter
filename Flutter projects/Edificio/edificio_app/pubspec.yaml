@@ -14,7 +14,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   uuid: ^4.3.3
   intl: ^0.20.2
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.3.2
   path_provider: ^2.0.15
   path: ^1.8.3
   image_picker: ^1.0.7
@@ -27,6 +27,23 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
-  uses-material-design: true 
+  uses-material-design: true
+  assets:
+    - assets/icon/
+
+# Configuración para flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  adaptive_icon_background: "#FFFFFF" # Fondo blanco
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  # Configuración para ajustar el tamaño
+  adaptive_icon_foreground_scale_factor: 0.45 # Reduce el tamaño al 45%
+  image_path_android: "assets/icon/app_icon.png"
+  image_path_ios: "assets/icon/app_icon.png" 

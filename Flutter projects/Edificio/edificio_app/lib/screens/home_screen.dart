@@ -13,7 +13,6 @@ import '../services/log_service.dart';
 import '../widgets/month_year_picker.dart';
 import '../screens/cuentas_transferencia_screen.dart';
 import '../screens/documentos_inquilino_screen.dart';
-import 'dart:convert';
 import '../widgets/calculadora_aumento_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -760,18 +759,17 @@ class _HomeScreenState extends State<HomeScreen>
               _inquilinos = inquilinosActualizados;
             });
             
-            // Recalcular totales con los datos actualizados
-            final mesAnio = DateFormat('MM-yyyy').format(_selectedDate);
-            _calcularTotalesRecibidos(_inquilinos, mesAnio);
+            // Forzar una recarga completa de los datos y la UI
+            _cargarInquilinos();
           }
           
           // Mostrar mensaje de éxito
           if (mounted) {
             ScaffoldMessenger.of(_scaffoldKey.currentContext!).showSnackBar(
-              SnackBar(
+              const SnackBar(
                 content: Text('Aumentos aplicados correctamente'),
                 backgroundColor: Colors.green,
-                duration: const Duration(seconds: 2),
+                duration: Duration(seconds: 2),
               ),
             );
           }
@@ -1877,9 +1875,8 @@ class _HomeScreenState extends State<HomeScreen>
       // Guardar todos los inquilinos utilizando el StorageService
       await _storageService.saveInquilinos(_inquilinos);
       
-      // Actualizar los totales
-      final mesAnio = DateFormat('MM-yyyy').format(_selectedDate);
-      _calcularTotalesRecibidos(_inquilinos, mesAnio);
+      // Forzar una recarga completa para asegurar que todos los datos se actualicen correctamente
+      _cargarInquilinos();
       
       log.i('Inquilino guardado exitosamente');
     } catch (e) {

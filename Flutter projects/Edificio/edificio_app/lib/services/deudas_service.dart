@@ -88,10 +88,15 @@ class DeudasService {
       return mesB.compareTo(mesA); // Orden descendente por mes
     });
     
-    // Obtener precio de alquiler (usar valor predeterminado si es necesario)
-    double precioAlquiler = inquilino.precioAlquiler;
-    if (precioAlquiler <= 0) {
-      precioAlquiler = 10000.0; // Valor predeterminado
+    // Ya no necesitamos obtener el precio de alquiler global porque
+    // ahora obtendremos el precio específico para cada mes usando getPrecioAlquilerPorMes
+    // Este bloque se mantiene solo por compatibilidad con el código existente
+    double precioAlquiler = 10000.0; // Valor predeterminado
+    if (inquilino.periodosPrecio.isNotEmpty) {
+      // Usar el precio más reciente como predeterminado
+      precioAlquiler = inquilino.periodosPrecio.last.precio;
+    } else if (inquilino.precioAlquiler > 0) {
+      precioAlquiler = inquilino.precioAlquiler;
     }
     
     // Obtener valor de expensas predeterminado
@@ -128,14 +133,17 @@ class DeudasService {
       
       // Agregar deuda de alquiler si no está pagado
       if (!pagadoAlquiler) {
+        // Obtener el precio específico para este mes utilizando el sistema de períodos
+        double alquilerMes = inquilino.getPrecioAlquilerPorMes(mesAnio);
+        
         deudas.add({
           'periodo': fechaFormateada,
           'mesAnio': mesAnio,
           'concepto': 'Alquiler',
-          'monto': precioAlquiler,
+          'monto': alquilerMes,
         });
-        totalDeuda += precioAlquiler;
-        //  - Agregada deuda de alquiler: \$${precioAlquiler.toStringAsFixed(2)}
+        totalDeuda += alquilerMes;
+        //  - Agregada deuda de alquiler: \$${alquilerMes.toStringAsFixed(2)}
       }
       
       // Agregar deuda de expensas si no está pagado

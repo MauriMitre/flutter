@@ -71,13 +71,22 @@ class StorageService {
       try {
         final map = jsonDecode(jsonStr) as Map<String, dynamic>;
         final inquilino = Inquilino.fromMap(map);
+        
         // Solo agregar inquilinos válidos
         if (inquilino.id.isNotEmpty) {
-          inquilinos.add(inquilino);
+          // Migrar los precios históricos al sistema de períodos
+          final inquilinoMigrado = inquilino.migrarPreciosAPeriodos();
+          inquilinos.add(inquilinoMigrado);
         }
       } catch (e) {
         log.e("Error al decodificar inquilino", e, StackTrace.current);
       }
+    }
+    
+    // Si la migración modificó los datos, guardarlos de nuevo
+    if (inquilinos.any((i) => i.periodosPrecio.isNotEmpty)) {
+      log.i("Guardando inquilinos migrados al sistema de períodos");
+      await saveInquilinos(inquilinos);
     }
     
     return inquilinos;

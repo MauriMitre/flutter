@@ -1,19 +1,17 @@
 import 'dart:convert';
 import '../services/log_service.dart';
 import 'package:intl/intl.dart';
+import 'periodo_precio.dart';
 
 // Enum para el método de pago
-enum MetodoPago {
-  efectivo,
-  transferencia
-}
+enum MetodoPago { efectivo, transferencia }
 
 // Extensión para convertir String a Enum y viceversa
 extension MetodoPagoExtension on MetodoPago {
   String toValue() {
     return toString().split('.').last;
   }
-  
+
   static MetodoPago fromValue(String? value) {
     if (value == null) return MetodoPago.efectivo;
     return MetodoPago.values.firstWhere(
@@ -28,7 +26,7 @@ class Inquilino {
   final String nombre;
   final String apellido;
   final String departamento;
-  final double _precioAlquilerBase;  // Precio base/predeterminado
+  final double _precioAlquilerBase; // Precio base/predeterminado
   final Map<String, bool> pagos;
   final Map<String, double> expensas;
   final Map<String, bool> pagosAlquiler;
@@ -36,14 +34,19 @@ class Inquilino {
   final Map<String, double> montosPendientes;
   final Map<String, MetodoPago> metodosPago;
   final Map<String, String> cuentasTransferencia;
-  final Map<String, double> preciosAlquilerPorMes;  // Mapa para precios históricos
+
+  // Nuevo campo para períodos de precios
+  final List<PeriodoPrecio> periodosPrecio;
+
+  // Mantenemos el mapa antiguo para compatibilidad durante la migración
+  final Map<String, double> preciosAlquilerPorMes;
 
   // Getter para obtener el precio actual del alquiler
   double get precioAlquiler {
     // Obtener el mes actual
     final mesActual = DateFormat('MM-yyyy').format(DateTime.now());
-    // Devolver el precio específico para este mes si existe, de lo contrario devolver el precio base
-    return preciosAlquilerPorMes[mesActual] ?? _precioAlquilerBase;
+    // Devolver el precio específico para este mes
+    return getPrecioAlquilerPorMes(mesActual);
   }
 
   Inquilino({
@@ -60,7 +63,15 @@ class Inquilino {
     this.metodosPago = const {},
     this.cuentasTransferencia = const {},
     this.preciosAlquilerPorMes = const {},
-  }) : _precioAlquilerBase = precioAlquiler;
+    List<PeriodoPrecio>? periodosPrecio,
+  })  : _precioAlquilerBase = precioAlquiler,
+        periodosPrecio = periodosPrecio ??
+            [
+              PeriodoPrecio(
+                fechaInicio: DateTime(2020, 1, 1),
+                precio: precioAlquiler,
+              )
+            ];
 
   // Crear una copia del inquilino con valores actualizados
   Inquilino copyWith({
@@ -77,6 +88,7 @@ class Inquilino {
     Map<String, MetodoPago>? metodosPago,
     Map<String, String>? cuentasTransferencia,
     Map<String, double>? preciosAlquilerPorMes,
+    List<PeriodoPrecio>? periodosPrecio,
   }) {
     return Inquilino(
       id: id ?? this.id,
@@ -90,116 +102,170 @@ class Inquilino {
       pagosExpensas: pagosExpensas ?? Map.from(this.pagosExpensas),
       montosPendientes: montosPendientes ?? Map.from(this.montosPendientes),
       metodosPago: metodosPago ?? Map.from(this.metodosPago),
-      cuentasTransferencia: cuentasTransferencia ?? Map.from(this.cuentasTransferencia),
-      preciosAlquilerPorMes: preciosAlquilerPorMes ?? Map.from(this.preciosAlquilerPorMes),
+      cuentasTransferencia:
+          cuentasTransferencia ?? Map.from(this.cuentasTransferencia),
+      preciosAlquilerPorMes:
+          preciosAlquilerPorMes ?? Map.from(this.preciosAlquilerPorMes),
+      periodosPrecio: periodosPrecio ?? List.from(this.periodosPrecio),
     );
   }
 
-  // Obtener el precio de alquiler para un mes específico
+  // Obtener el precio de alquiler para un mes específico usando períodos
   double getPrecioAlquilerPorMes(String mesAnio) {
-    log.d('Obteniendo precio para $mesAnio, mapa: ${preciosAlquilerPorMes.length} entradas');
-    
-    // Si hay un precio específico para este mes, devolver ese
-    if (preciosAlquilerPorMes.containsKey(mesAnio)) {
-      log.d('Precio encontrado directamente para $mesAnio: ${preciosAlquilerPorMes[mesAnio]}');
-      return preciosAlquilerPorMes[mesAnio]!;
+    log.d('Obteniendo precio para $mesAnio');
+
+    // Si no hay períodos definidos o la lista está vacía, usar el precio base
+    if (periodosPrecio.isEmpty) {
+      // Verificar el mapa antiguo durante la migración
+      if (preciosAlquilerPorMes.containsKey(mesAnio)) {
+        return preciosAlquilerPorMes[mesAnio]!;
+      }
+      return _precioAlquilerBase;
     }
-    
+
     // Obtener mes y año del parámetro
     final partes = mesAnio.split('-');
     if (partes.length != 2) {
-      log.d('Formato de fecha inválido: $mesAnio, usando precio base: $_precioAlquilerBase');
+      log.d('Formato de fecha inválido: $mesAnio, usando precio base');
       return _precioAlquilerBase;
     }
-    
+
     final mesNum = int.tryParse(partes[0]) ?? 0;
     final anioNum = int.tryParse(partes[1]) ?? 0;
-    
+
     if (mesNum <= 0 || anioNum <= 0) {
-      log.d('Números de mes/año inválidos: $mesAnio, usando precio base: $_precioAlquilerBase');
+      log.d('Números de mes/año inválidos: $mesAnio, usando precio base');
       return _precioAlquilerBase;
     }
-    
-    // Buscar el precio más reciente anterior a esta fecha
-    String? mesReciente;
-    DateTime fechaReciente = DateTime(1900);
-    DateTime fechaActual = DateTime(anioNum, mesNum, 1);
-    
-    // Mostrar todas las fechas disponibles para depuración
-    log.d('Fechas disponibles en preciosAlquilerPorMes: ${preciosAlquilerPorMes.keys.toList().join(", ")}');
-    
-    for (final key in preciosAlquilerPorMes.keys) {
-      final partesMes = key.split('-');
-      if (partesMes.length != 2) continue;
-      
-      final mesItem = int.tryParse(partesMes[0]) ?? 0;
-      final anioItem = int.tryParse(partesMes[1]) ?? 0;
-      
-      if (mesItem <= 0 || anioItem <= 0) continue;
-      
-      final fechaItem = DateTime(anioItem, mesItem, 1);
-      
-      // Si esta fecha es anterior a la fecha actual pero más reciente que la encontrada hasta ahora
-      if (fechaItem.isBefore(fechaActual) && fechaItem.isAfter(fechaReciente)) {
-        fechaReciente = fechaItem;
-        mesReciente = key;
-        log.d('Encontrada fecha más reciente: $mesReciente (${preciosAlquilerPorMes[mesReciente]})');
-      }
-    }
-    
-    // Si encontramos un mes anterior, devolver su precio
-    if (mesReciente != null) {
-      log.d('Usando precio histórico para $mesAnio desde $mesReciente: ${preciosAlquilerPorMes[mesReciente]}');
-      return preciosAlquilerPorMes[mesReciente]!;
-    }
-    
-    // Si no hay precio para este mes ni para meses anteriores, devolver el precio base
-    log.d('No se encontró precio histórico para $mesAnio, usando precio base: $_precioAlquilerBase');
-    return _precioAlquilerBase;
-  }
 
-  // Aplicar un aumento de alquiler preservando el historial
-  static Inquilino aplicarAumento(Inquilino inquilino, String mesActual, double nuevoPrecio) {
-    log.i('Aplicando aumento: ${inquilino._precioAlquilerBase} -> $nuevoPrecio a partir de $mesActual');
-    
-    // Crear un nuevo mapa para los precios históricos
-    final nuevosPreciosHistoricos = Map<String, double>.from(inquilino.preciosAlquilerPorMes);
-    
-    // Guardar el precio actual como histórico para TODOS los meses anteriores a mesActual
-    // que no tengan un precio específico ya establecido
-    final partes = mesActual.split('-');
-    if (partes.length == 2) {
-      final mesActualNum = int.tryParse(partes[0]) ?? 0;
-      final anioActualNum = int.tryParse(partes[1]) ?? 0;
-      
-      if (mesActualNum > 0 && anioActualNum > 0) {
-        // Para todos los meses anteriores al mes actual, guardar el precio actual
-        for (int anio = 2020; anio <= anioActualNum; anio++) {
-          for (int mes = 1; mes <= 12; mes++) {
-            // Si es un mes anterior al mes actual del año actual, o un año anterior
-            if ((anio < anioActualNum) || (anio == anioActualNum && mes < mesActualNum)) {
-              final mesAnioStr = '${mes.toString().padLeft(2, '0')}-$anio';
-              
-              // Solo guardar si no hay un precio específico ya establecido
-              if (!nuevosPreciosHistoricos.containsKey(mesAnioStr)) {
-                nuevosPreciosHistoricos[mesAnioStr] = inquilino._precioAlquilerBase;
-                log.d('Guardando precio histórico para $mesAnioStr: ${inquilino._precioAlquilerBase}');
-              }
-            }
-          }
+    final fechaConsulta = DateTime(anioNum, mesNum, 1);
+
+    // Buscar el período aplicable (el más reciente que sea anterior o igual a la fecha consultada)
+    PeriodoPrecio? periodoAplicable;
+
+    for (final periodo in periodosPrecio) {
+      if (periodo.fechaInicio.isBefore(fechaConsulta) ||
+          (periodo.fechaInicio.month == fechaConsulta.month &&
+              periodo.fechaInicio.year == fechaConsulta.year)) {
+        if (periodoAplicable == null ||
+            periodo.fechaInicio.isAfter(periodoAplicable.fechaInicio)) {
+          periodoAplicable = periodo;
         }
       }
     }
-    
-    // Guardar el nuevo precio para el mes actual y futuros
-    nuevosPreciosHistoricos[mesActual] = nuevoPrecio;
-    log.d('Guardando nuevo precio para $mesActual: $nuevoPrecio');
-    
-    // Crear una nueva instancia actualizando tanto el precio base como el historial
-    // Es necesario actualizar el precio base para que se muestre correctamente en todas las partes de la app
-    return inquilino.copyWith(
-      precioAlquiler: nuevoPrecio,  // Actualizamos el precio base para reflejarlo en toda la app
-      preciosAlquilerPorMes: nuevosPreciosHistoricos,
+
+    if (periodoAplicable != null) {
+      log.d(
+          'Usando precio de período: ${periodoAplicable.fechaInicio.month}/${periodoAplicable.fechaInicio.year}: \$${periodoAplicable.precio}');
+      return periodoAplicable.precio;
+    }
+
+    // Si no encontramos un período aplicable, verificar el mapa antiguo durante la migración
+    if (preciosAlquilerPorMes.containsKey(mesAnio)) {
+      return preciosAlquilerPorMes[mesAnio]!;
+    }
+
+    // Si no hay precio para este mes ni para meses anteriores, devolver el precio base
+    log.d(
+        'No se encontró precio aplicable para $mesAnio, usando precio base: $_precioAlquilerBase');
+    return _precioAlquilerBase;
+  }
+
+  // Migrar datos del formato antiguo al nuevo sistema de períodos
+  Inquilino migrarPreciosAPeriodos() {
+    if (periodosPrecio.isNotEmpty || preciosAlquilerPorMes.isEmpty) {
+      // Ya está migrado o no hay datos que migrar
+      return this;
+    }
+
+    final nuevosPeriodos = <PeriodoPrecio>[];
+    final fechas = preciosAlquilerPorMes.keys.toList();
+
+    // Ordenar las fechas cronológicamente
+    fechas.sort((a, b) {
+      final partesA = a.split('-');
+      final partesB = b.split('-');
+      final fechaA = DateTime(int.parse(partesA[1]), int.parse(partesA[0]));
+      final fechaB = DateTime(int.parse(partesB[1]), int.parse(partesB[0]));
+      return fechaA.compareTo(fechaB);
+    });
+
+    // Convertir cada entrada a un período
+    for (final fechaStr in fechas) {
+      final partes = fechaStr.split('-');
+      final mes = int.parse(partes[0]);
+      final anio = int.parse(partes[1]);
+
+      nuevosPeriodos.add(PeriodoPrecio(
+        fechaInicio: DateTime(anio, mes, 1),
+        precio: preciosAlquilerPorMes[fechaStr]!,
+      ));
+    }
+
+    // Asegurar que haya al menos un período inicial con el precio base
+    if (nuevosPeriodos.isEmpty ||
+        nuevosPeriodos[0].fechaInicio.isAfter(DateTime(2020, 1, 1))) {
+      nuevosPeriodos.insert(
+          0,
+          PeriodoPrecio(
+            fechaInicio: DateTime(2020, 1, 1),
+            precio: _precioAlquilerBase,
+          ));
+    }
+
+    log.i(
+        'Migrados ${nuevosPeriodos.length} períodos de precio para $nombre $apellido');
+
+    // Crear una copia con los nuevos períodos
+    return copyWith(
+      periodosPrecio: nuevosPeriodos,
+    );
+  }
+
+  // Aplicar un aumento de alquiler usando el sistema de períodos
+  static Inquilino aplicarAumento(
+      Inquilino inquilino, String mesActual, double nuevoPrecio) {
+    log.i(
+        'Aplicando aumento: ${inquilino._precioAlquilerBase} -> $nuevoPrecio a partir de $mesActual');
+
+    // Asegurar que el inquilino tenga sus datos migrados al sistema de períodos
+    Inquilino inquilinoMigrado = inquilino.migrarPreciosAPeriodos();
+
+    // Crear una copia de los períodos existentes
+    final nuevosPeriodos =
+        List<PeriodoPrecio>.from(inquilinoMigrado.periodosPrecio);
+
+    // Obtener mes y año del parámetro
+    final partes = mesActual.split('-');
+    if (partes.length != 2) {
+      log.e('Formato de fecha inválido: $mesActual');
+      return inquilino;
+    }
+
+    final mesActualNum = int.tryParse(partes[0]) ?? 0;
+    final anioActualNum = int.tryParse(partes[1]) ?? 0;
+
+    if (mesActualNum <= 0 || anioActualNum <= 0) {
+      log.e('Números de mes/año inválidos: $mesActual');
+      return inquilino;
+    }
+
+    final fechaAumento = DateTime(anioActualNum, mesActualNum, 1);
+
+    // Añadir el nuevo período con el precio aumentado
+    nuevosPeriodos.add(PeriodoPrecio(
+      fechaInicio: fechaAumento,
+      precio: nuevoPrecio,
+    ));
+
+    log.d(
+        'Agregado nuevo período: ${DateFormat('MM-yyyy').format(fechaAumento)} con precio \$$nuevoPrecio');
+
+    // Crear una nueva instancia con los períodos actualizados
+    return inquilinoMigrado.copyWith(
+      precioAlquiler:
+          nuevoPrecio, // Actualizamos también el precio base para compatibilidad
+      periodosPrecio: nuevosPeriodos,
     );
   }
 
@@ -210,38 +276,41 @@ class Inquilino {
 
   // Verifica si ha pagado el alquiler
   bool haPagadoAlquiler(String mesAnio) {
-    log.d('Verificando pago de alquiler para $mesAnio: ${pagosAlquiler[mesAnio] ?? false}');
+    log.d(
+        'Verificando pago de alquiler para $mesAnio: ${pagosAlquiler[mesAnio] ?? false}');
     return pagosAlquiler[mesAnio] ?? false;
   }
 
   // Verifica si ha pagado las expensas
   bool haPagadoExpensas(String mesAnio) {
-    log.d('Verificando pago de expensas para $mesAnio: ${pagosExpensas[mesAnio] ?? false}');
+    log.d(
+        'Verificando pago de expensas para $mesAnio: ${pagosExpensas[mesAnio] ?? false}');
     return pagosExpensas[mesAnio] ?? false;
   }
 
   // Obtener el monto pendiente para un mes específico
   double getMontoPendiente(String mesAnio) {
-    log.d('Obteniendo monto pendiente para $mesAnio: ${montosPendientes[mesAnio] ?? 0.0}');
+    log.d(
+        'Obteniendo monto pendiente para $mesAnio: ${montosPendientes[mesAnio] ?? 0.0}');
     return montosPendientes[mesAnio] ?? 0.0;
   }
-  
+
   // Obtener el método de pago para un mes específico
   MetodoPago getMetodoPago(String mesAnio) {
     return metodosPago[mesAnio] ?? MetodoPago.efectivo;
   }
-  
+
   // Establecer el método de pago para un mes específico
   void setMetodoPago(String mesAnio, MetodoPago metodoPago) {
     metodosPago[mesAnio] = metodoPago;
-    log.d('Establecido método de pago para $mesAnio: ${metodoPago.toString()}');
+    log.d('Establecido método de pago para $mesAnio: $metodoPago');
   }
-  
+
   // Obtener la cuenta de transferencia para un mes específico
   String getCuentaTransferencia(String mesAnio) {
     return cuentasTransferencia[mesAnio] ?? '';
   }
-  
+
   // Establecer la cuenta de transferencia para un mes específico
   void setCuentaTransferencia(String mesAnio, String cuenta) {
     cuentasTransferencia[mesAnio] = cuenta;
@@ -251,7 +320,7 @@ class Inquilino {
   // Marcar como pagado (tanto alquiler como expensas)
   void marcarPagado(String mesAnio, bool pagado) {
     pagos[mesAnio] = pagado;
-    
+
     // Si se marca como pagado, marcar ambos como pagados
     if (pagado) {
       pagosAlquiler[mesAnio] = true;
@@ -267,17 +336,19 @@ class Inquilino {
   // Marcar pago de alquiler
   void marcarPagoAlquiler(String mesAnio, bool pagado) {
     pagosAlquiler[mesAnio] = pagado;
-    
+
     // Actualizar estado general
-    pagos[mesAnio] = pagosAlquiler[mesAnio] == true && pagosExpensas[mesAnio] == true;
+    pagos[mesAnio] =
+        pagosAlquiler[mesAnio] == true && pagosExpensas[mesAnio] == true;
   }
 
   // Marcar pago de expensas
   void marcarPagoExpensas(String mesAnio, bool pagado) {
     pagosExpensas[mesAnio] = pagado;
-    
+
     // Actualizar estado general
-    pagos[mesAnio] = pagosAlquiler[mesAnio] == true && pagosExpensas[mesAnio] == true;
+    pagos[mesAnio] =
+        pagosAlquiler[mesAnio] == true && pagosExpensas[mesAnio] == true;
   }
 
   // Establecer monto pendiente
@@ -308,6 +379,8 @@ class Inquilino {
   }
 
   Map<String, dynamic> toMap() {
+    final periodosJson = periodosPrecio.map((p) => p.toMap()).toList();
+
     return {
       'id': id,
       'nombre': nombre,
@@ -319,9 +392,11 @@ class Inquilino {
       'pagosAlquiler': jsonEncode(pagosAlquiler),
       'pagosExpensas': jsonEncode(pagosExpensas),
       'montosPendientes': jsonEncode(montosPendientes),
-      'metodosPago': jsonEncode(metodosPago.map((k, v) => MapEntry(k, v.index))),
+      'metodosPago':
+          jsonEncode(metodosPago.map((k, v) => MapEntry(k, v.index))),
       'cuentasTransferencia': jsonEncode(cuentasTransferencia),
       'preciosAlquilerPorMes': jsonEncode(preciosAlquilerPorMes),
+      'periodosPrecio': jsonEncode(periodosJson),
     };
   }
 
@@ -329,13 +404,15 @@ class Inquilino {
     try {
       // Función auxiliar para convertir JSON a Map<String, bool>
       Map<String, bool> parseBoolMap(String jsonStr) {
-        final Map<String, dynamic> jsonMap = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final Map<String, dynamic> jsonMap =
+            jsonDecode(jsonStr) as Map<String, dynamic>;
         return jsonMap.map((key, value) => MapEntry(key, value as bool));
       }
 
       // Función auxiliar para convertir JSON a Map<String, double>
       Map<String, double> parseDoubleMap(String jsonStr) {
-        final Map<String, dynamic> jsonMap = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final Map<String, dynamic> jsonMap =
+            jsonDecode(jsonStr) as Map<String, dynamic>;
         return jsonMap.map((key, value) {
           if (value is int) {
             return MapEntry(key, value.toDouble());
@@ -346,14 +423,47 @@ class Inquilino {
 
       // Función auxiliar para convertir JSON a Map<String, MetodoPago>
       Map<String, MetodoPago> parseMetodoPagoMap(String jsonStr) {
-        final Map<String, dynamic> jsonMap = jsonDecode(jsonStr) as Map<String, dynamic>;
-        return jsonMap.map((key, value) => MapEntry(key, MetodoPago.values[value as int]));
+        final Map<String, dynamic> jsonMap =
+            jsonDecode(jsonStr) as Map<String, dynamic>;
+        return jsonMap.map(
+            (key, value) => MapEntry(key, MetodoPago.values[value as int]));
       }
 
       // Función auxiliar para convertir JSON a Map<String, String>
       Map<String, String> parseStringMap(String jsonStr) {
-        final Map<String, dynamic> jsonMap = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final Map<String, dynamic> jsonMap =
+            jsonDecode(jsonStr) as Map<String, dynamic>;
         return jsonMap.map((key, value) => MapEntry(key, value as String));
+      }
+
+      // Función para parsear períodos de precio
+      List<PeriodoPrecio> parsePeriodosPrecio(String? jsonStr) {
+        if (jsonStr == null || jsonStr.isEmpty) return [];
+        final List<dynamic> jsonList = jsonDecode(jsonStr) as List<dynamic>;
+        return jsonList
+            .map((json) => PeriodoPrecio.fromMap(json as Map<String, dynamic>))
+            .toList();
+      }
+
+      // Precio base de alquiler
+      final precioBase = (map['precioAlquiler'] is int)
+          ? (map['precioAlquiler'] as int).toDouble()
+          : map['precioAlquiler'] as double;
+
+      // Intentar cargar los períodos de precio
+      List<PeriodoPrecio> periodos = [];
+      if (map.containsKey('periodosPrecio') && map['periodosPrecio'] != null) {
+        periodos = parsePeriodosPrecio(map['periodosPrecio'] as String);
+      }
+
+      // Si no hay períodos, crear uno con el precio base
+      if (periodos.isEmpty) {
+        periodos = [
+          PeriodoPrecio(
+            fechaInicio: DateTime(2020, 1, 1),
+            precio: precioBase,
+          )
+        ];
       }
 
       return Inquilino(
@@ -361,33 +471,38 @@ class Inquilino {
         nombre: map['nombre'] as String,
         apellido: map['apellido'] as String,
         departamento: map['departamento'] as String,
-        precioAlquiler: (map['precioAlquiler'] is int)
-            ? (map['precioAlquiler'] as int).toDouble()
-            : map['precioAlquiler'] as double,
+        precioAlquiler: precioBase,
         pagos: map.containsKey('pagos') && map['pagos'] != null
             ? parseBoolMap(map['pagos'] as String)
             : {},
         expensas: map.containsKey('expensas') && map['expensas'] != null
             ? parseDoubleMap(map['expensas'] as String)
             : {},
-        pagosAlquiler: map.containsKey('pagosAlquiler') && map['pagosAlquiler'] != null
-            ? parseBoolMap(map['pagosAlquiler'] as String)
-            : {},
-        pagosExpensas: map.containsKey('pagosExpensas') && map['pagosExpensas'] != null
-            ? parseBoolMap(map['pagosExpensas'] as String)
-            : {},
-        montosPendientes: map.containsKey('montosPendientes') && map['montosPendientes'] != null
+        pagosAlquiler:
+            map.containsKey('pagosAlquiler') && map['pagosAlquiler'] != null
+                ? parseBoolMap(map['pagosAlquiler'] as String)
+                : {},
+        pagosExpensas:
+            map.containsKey('pagosExpensas') && map['pagosExpensas'] != null
+                ? parseBoolMap(map['pagosExpensas'] as String)
+                : {},
+        montosPendientes: map.containsKey('montosPendientes') &&
+                map['montosPendientes'] != null
             ? parseDoubleMap(map['montosPendientes'] as String)
             : {},
-        metodosPago: map.containsKey('metodosPago') && map['metodosPago'] != null
-            ? parseMetodoPagoMap(map['metodosPago'] as String)
-            : {},
-        cuentasTransferencia: map.containsKey('cuentasTransferencia') && map['cuentasTransferencia'] != null
+        metodosPago:
+            map.containsKey('metodosPago') && map['metodosPago'] != null
+                ? parseMetodoPagoMap(map['metodosPago'] as String)
+                : {},
+        cuentasTransferencia: map.containsKey('cuentasTransferencia') &&
+                map['cuentasTransferencia'] != null
             ? parseStringMap(map['cuentasTransferencia'] as String)
             : {},
-        preciosAlquilerPorMes: map.containsKey('preciosAlquilerPorMes') && map['preciosAlquilerPorMes'] != null
+        preciosAlquilerPorMes: map.containsKey('preciosAlquilerPorMes') &&
+                map['preciosAlquilerPorMes'] != null
             ? parseDoubleMap(map['preciosAlquilerPorMes'] as String)
             : {},
+        periodosPrecio: periodos,
       );
     } catch (e, stackTrace) {
       log.e("Error al crear Inquilino desde Map", e, stackTrace);
@@ -399,4 +514,4 @@ class Inquilino {
 
   factory Inquilino.fromJson(String source) =>
       Inquilino.fromMap(json.decode(source));
-} 
+}
